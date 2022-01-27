@@ -1,221 +1,378 @@
-"""Training script.
-usage: train.py [options]
+#!/usr/bin/env python
+# coding: utf-8
 
-options:
-    --inner_learning_rate=ilr   Learning rate of inner loop [default: 1e-3]
-    --outer_learning_rate=olr   Learning rate of outer loop [default: 1e-4]
-    --batch_size=bs             Size of task to train with [default: 4]
-    --inner_epochs=ie           Amount of meta epochs in the inner loop [default: 10]
-    --height=h                  Height of image [default: 32]
-    --length=l                  Length of image [default: 32]
-    --dataset=ds                Dataset name (Mnist, Omniglot, FIGR8) [default: FIGR8]
-    --neural_network=nn         Either ResNet or DCGAN [default: DCGAN]
-    -h, --help                  Show this help message and exit
-"""
-from docopt import docopt
+# In[ ]:
 
 
-import torch
-import torch.optim as optim
-import torch.autograd as autograd
-
-from tensorboardX import SummaryWriter
+import matplotlib.pyplot as plt
 import numpy as np
-import os
-from environnements import MnistMetaEnv, OmniglotMetaEnv, FIGR8MetaEnv
-from model import ResNetDiscriminator, ResNetGenerator, DCGANGenerator, DCGANDiscriminator
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def wassertein_loss(inputs, targets):
-    return torch.mean(inputs * targets)
+import random
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import tensorflow_datasets as tfds
 
 
-def calc_gradient_penalty(discriminator, real_batch, fake_batch):
-    epsilon = torch.rand(real_batch.shape[0], 1, device=device)
-    interpolates = epsilon.view(-1, 1, 1, 1) * real_batch + (1 - epsilon).view(-1, 1, 1, 1) * fake_batch
-    interpolates = autograd.Variable(interpolates, requires_grad=True)
-    disc_interpolates = discriminator(interpolates)
-
-    gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
-                              grad_outputs=torch.ones(disc_interpolates.size(), device=device),
-                              create_graph=True, retain_graph=True, only_inputs=True)[0]
-
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * 10
-    return gradient_penalty
+# In[ ]:
 
 
-def normalize_data(data):
-    data *= 2
-    data -= 1
-    return data
+IMG_H = 64
+IMG_W = 64
+IMG_C = 3  ## Change this to 1 for grayscale.
+
+# Weight initializers for the Generator network
+WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
+
+latent_dim = 128
+    
+learning_rate = 0.0001
+meta_step_size = 0.25
+
+inner_batch_size = 25
+eval_batch_size = 25
+
+meta_iters = 2000
+eval_iters = 5
+inner_iters = 4
+
+eval_interval = 1
+train_shots = 20
+shots = 5
+classes = 5
 
 
-def unnormalize_data(data):
-    data += 1
-    data /= 2
-    return data
+# In[ ]:
 
 
-class FIGR:
-    def __init__(self, args):
-        self.load_args(args)
-        self.id_string = self.get_id_string()
-        self.z_shape = 100
-        self.writer = SummaryWriter('Runs/' + self.id_string)
-        self.env = eval(self.dataset + 'MetaEnv(height=self.height, length=self.length)')
-        self.initialize_gan()
-        self.load_checkpoint()
-
-    def inner_loop(self, real_batch):
-        self.meta_g.train()
-        fake_batch = self.meta_g(torch.tensor(np.random.normal(size=(self.batch_size, self.z_shape)), dtype=torch.float, device=device))
-        training_batch = torch.cat([real_batch, fake_batch])
-
-        # Training discriminator
-        gradient_penalty = calc_gradient_penalty(self.meta_d, real_batch, fake_batch)
-        discriminator_pred = self.meta_d(training_batch)
-        discriminator_loss = wassertein_loss(discriminator_pred, self.discriminator_targets)
-        discriminator_loss += gradient_penalty
-
-        self.meta_d_optim.zero_grad()
-        discriminator_loss.backward()
-        self.meta_d_optim.step()
-
-        # Training generator
-        output = self.meta_d(self.meta_g(torch.tensor(np.random.normal(size=(self.batch_size, self.z_shape)), dtype=torch.float, device=device)))
-        generator_loss = wassertein_loss(output, self.generator_targets)
-
-        self.meta_g_optim.zero_grad()
-        generator_loss.backward()
-        self.meta_g_optim.step()
-
-        return discriminator_loss.item(), generator_loss.item()
-
-    def validation_run(self):
-        data, task = self.env.sample_validation_task(self.batch_size)
-        training_images = data.cpu().numpy()
-        training_images = np.concatenate([training_images[i] for i in range(self.batch_size)], axis=-1)
-        data = normalize_data(data)
-        real_batch = data.to(device)
-
-        discriminator_total_loss = 0
-        generator_total_loss = 0
-
-        for _ in range(self.inner_epochs):
-            disc_loss, gen_loss = self.inner_loop(real_batch)
-            discriminator_total_loss += disc_loss
-            generator_total_loss += gen_loss
-
-        self.meta_g.eval()
-        with torch.no_grad():
-            img = self.meta_g(torch.tensor(np.random.normal(size=(self.batch_size * 3, self.z_shape)), dtype=torch.float, device=device))
-        img = img.detach().cpu().numpy()
-        img = np.concatenate([np.concatenate([img[i * 3 + j] for j in range(3)], axis=-2) for i in range(self.batch_size)], axis=-1)
-        img = unnormalize_data(img)
-        img = np.concatenate([training_images, img], axis=-2)
-        self.writer.add_image('Validation_generated', img, self.eps)
-        self.writer.add_scalar('Validation_discriminator_loss', discriminator_total_loss, self.eps)
-        self.writer.add_scalar('Validation_generator_loss', generator_total_loss, self.eps)
-
-    def meta_training_loop(self):
-        data, task = self.env.sample_training_task(self.batch_size)
-        data = normalize_data(data)
-        real_batch = data.to(device)
-
-        discriminator_total_loss = 0
-        generator_total_loss = 0
-
-        for _ in range(self.inner_epochs):
-            disc_loss, gen_loss = self.inner_loop(real_batch)
-            discriminator_total_loss += disc_loss
-            generator_total_loss += gen_loss
-
-        self.writer.add_scalar('Training_discriminator_loss', discriminator_total_loss, self.eps)
-        self.writer.add_scalar('Training_generator_loss', generator_total_loss, self.eps)
-
-        # Updating both generator and dicriminator
-        for p, meta_p in zip(self.g.parameters(), self.meta_g.parameters()):
-            diff = p - meta_p.cpu()
-            p.grad = diff
-        self.g_optim.step()
-
-        for p, meta_p in zip(self.d.parameters(), self.meta_d.parameters()):
-            diff = p - meta_p.cpu()
-            p.grad = diff
-        self.d_optim.step()
-
-    def reset_meta_model(self):
-        self.meta_g.train()
-        self.meta_d.train()
-        self.meta_d.load_state_dict(self.d.state_dict())
-        self.meta_g.load_state_dict(self.g.state_dict())
-
-    def training(self):
-        while self.eps <= 1000000:
-            self.reset_meta_model()
-            self.meta_training_loop()
-
-            # Validation run every 10000 training loop
-            if self.eps % 10000 == 0:
-                self.reset_meta_model()
-                self.validation_run()
-                self.checkpoint_model()
-            self.eps += 1
+def save_plot(examples, epoch, n):
+    examples = (examples + 1) / 2.0
+    for i in range(n * n):
+        plt.subplot(n, n, i+1)
+        plt.axis("off")
+        plt.imshow(examples[i])  ## pyplot.imshow(np.squeeze(examples[i], axis=-1))
+    filename = f"samples/generated_plot_epoch-{epoch}.png"
+    plt.savefig(filename)
+    plt.close()
 
 
-    def load_args(self, args):
-        self.outer_learning_rate = float(args['--outer_learning_rate'])
-        self.inner_learning_rate = float(args['--inner_learning_rate'])
-        self.batch_size = int(args['--batch_size'])
-        self.inner_epochs = int(args['--inner_epochs'])
-        self.height = int(args['--height'])
-        self.length = int(args['--length'])
-        self.dataset = args['--dataset']
-        self.neural_network = args['--neural_network']
-
-    def load_checkpoint(self):
-        if os.path.isfile('Runs/' + self.id_string + '/checkpoint'):
-            checkpoint = torch.load('Runs/' + self.id_string + '/checkpoint')
-            self.d.load_state_dict(checkpoint['discriminator'])
-            self.g.load_state_dict(checkpoint['generator'])
-            self.eps = checkpoint['episode']
-        else:
-            self.eps = 0
-
-    def get_id_string(self):
-        return '{}_{}_olr{}_ilr{}_bsize{}_ie{}_h{}_l{}'.format(self.neural_network,
-                                                                         self.dataset,
-                                                                         str(self.outer_learning_rate),
-                                                                         str(self.inner_learning_rate),
-                                                                         str(self.batch_size),
-                                                                         str(self.inner_epochs),
-                                                                         str(self.height),
-                                                                         str(self.length))
-
-    def initialize_gan(self):
-        # D and G on CPU since they never do a feed forward operation
-        self.d = eval(self.neural_network + 'Discriminator(self.env.channels, self.env.height, self.env.length)')
-        self.g = eval(self.neural_network + 'Generator(self.z_shape, self.env.channels, self.env.height, self.env.length)')
-        self.meta_d = eval(self.neural_network + 'Discriminator(self.env.channels, self.env.height, self.env.length)').to(device)
-        self.meta_g = eval(self.neural_network + 'Generator(self.z_shape, self.env.channels, self.env.height, self.env.length)').to(device)
-        self.d_optim = optim.Adam(params=self.d.parameters(), lr=self.outer_learning_rate)
-        self.g_optim = optim.Adam(params=self.g.parameters(), lr=self.outer_learning_rate)
-        self.meta_d_optim = optim.SGD(params=self.meta_d.parameters(), lr=self.inner_learning_rate)
-        self.meta_g_optim = optim.SGD(params=self.meta_g.parameters(), lr=self.inner_learning_rate)
-
-        self.discriminator_targets = torch.tensor([1] * self.batch_size + [-1] * self.batch_size, dtype=torch.float, device=device).view(-1, 1)
-        self.generator_targets = torch.tensor([1] * self.batch_size, dtype=torch.float, device=device).view(-1, 1)
+# In[ ]:
 
 
-    def checkpoint_model(self):
-        checkpoint = {'discriminator': self.d.state_dict(),
-                      'generator': self.g.state_dict(),
-                      'episode': self.eps}
-        torch.save(checkpoint, 'Runs/' + self.id_string + '/checkpoint')
+class Dataset:
+    # This class will facilitate the creation of a few-shot dataset
+    # from the Omniglot dataset that can be sampled from quickly while also
+    # allowing to create new labels at the same time.
+    def __init__(self, training):
+        # Download the tfrecord files containing the omniglot data and convert to a
+        # dataset.
+        split = "train" if training else "test"
+        ds = tfds.load("omniglot", split=split, as_supervised=True, shuffle_files=False)
+        # Iterate over the dataset to get each individual image and its class,
+        # and put that data into a dictionary.
+        self.data = {}
 
-if __name__ == '__main__':
-    args = docopt(__doc__)
-    env = FIGR(args)
-    env.training()
+        def extraction(image, label):
+            # This function will shrink the Omniglot images to the desired size,
+            # scale pixel values and convert the RGB image to grayscale
+            image = tf.image.convert_image_dtype(image, tf.float32)
+            image = tf.image.rgb_to_grayscale(image)
+            image = tf.image.resize(image, [IMG_H, IMG_W])
+            return image, label
+
+        for image, label in ds.map(extraction):
+            image = image.numpy()
+            label = str(label.numpy())
+            if label not in self.data:
+                self.data[label] = []
+            self.data[label].append(image)
+        self.labels = list(self.data.keys())
+
+    def get_mini_dataset(
+        self, batch_size, repetitions, shots, num_classes, split=False
+    ):
+        temp_labels = np.zeros(shape=(num_classes * shots))
+        temp_images = np.zeros(shape=(num_classes * shots, IMG_H, IMG_W, IMG_C))
+        if split:
+            test_labels = np.zeros(shape=(num_classes))
+            test_images = np.zeros(shape=(num_classes, IMG_H, IMG_W, IMG_C))
+
+        # Get a random subset of labels from the entire label set.
+        label_subset = random.choices(self.labels, k=num_classes)
+        for class_idx, class_obj in enumerate(label_subset):
+            # Use enumerated index value as a temporary label for mini-batch in
+            # few shot learning.
+            temp_labels[class_idx * shots : (class_idx + 1) * shots] = class_idx
+            # If creating a split dataset for testing, select an extra sample from each
+            # label to create the test dataset.
+            if split:
+                test_labels[class_idx] = class_idx
+                images_to_split = random.choices(
+                    self.data[label_subset[class_idx]], k=shots + 1
+                )
+                test_images[class_idx] = images_to_split[-1]
+                temp_images[
+                    class_idx * shots : (class_idx + 1) * shots
+                ] = images_to_split[:-1]
+            else:
+                # For each index in the randomly selected label_subset, sample the
+                # necessary number of images.
+                temp_images[
+                    class_idx * shots : (class_idx + 1) * shots
+                ] = random.choices(self.data[label_subset[class_idx]], k=shots)
+
+        dataset = tf.data.Dataset.from_tensor_slices(
+            (temp_images.astype(np.float32), temp_labels.astype(np.int32))
+        )
+        dataset = dataset.shuffle(100).batch(batch_size).repeat(repetitions)
+        if split:
+            return dataset, test_images, test_labels
+        return dataset
+
+
+import urllib3
+
+urllib3.disable_warnings()  # Disable SSL warnings that may happen during download.
+train_dataset = Dataset(training=True)
+test_dataset = Dataset(training=False)
+
+
+# In[ ]:
+
+
+_, axarr = plt.subplots(nrows=5, ncols=5, figsize=(20, 20))
+
+sample_keys = list(train_dataset.data.keys())
+
+for a in range(5):
+    for b in range(5):
+        temp_image = train_dataset.data[sample_keys[a]][b]
+        temp_image = np.stack((temp_image[:, :, 0],) * 3, axis=2)
+        temp_image *= 255
+        temp_image = np.clip(temp_image, 0, 255).astype("uint8")
+        if b == 2:
+            axarr[a, b].set_title("Class : " + sample_keys[a])
+        axarr[a, b].imshow(temp_image, cmap="gray")
+        axarr[a, b].xaxis.set_visible(False)
+        axarr[a, b].yaxis.set_visible(False)
+plt.show()
+
+
+# In[ ]:
+
+
+# create generator model based on resnet50 and unet network
+def build_generator(input_shape):
+    model = tf.keras.Sequential()
+    
+    # Random noise to 16x16x256 image
+    # model.add(tf.keras.layers.Dense(1024, activation="relu", use_bias=False, input_shape=input_shape))
+    model.add(tf.keras.layers.Dense(4*4*512, input_shape=input_shape))
+    
+    model.add(tf.keras.layers.BatchNormalization())
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Reshape([4,4,512]))
+    
+    
+    model.add(tf.keras.layers.Conv2DTranspose(256, (5,5),strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.Conv2D(128, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
+    model.add(tf.keras.layers.BatchNormalization())
+    model.add(tf.keras.layers.LeakyReLU())
+    
+  
+    
+    model.add(tf.keras.layers.Conv2DTranspose(128, (5,5),strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.Conv2D(64, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.BatchNormalization())
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.BatchNormalization())
+    
+    
+    
+    model.add(tf.keras.layers.Conv2DTranspose(64, (5,5), strides=(2,2),use_bias=False,padding="same", kernel_initializer=WEIGHT_INIT))
+    # model.add(tf.keras.layers.Conv2D(32, (1,1),strides=(2,2), use_bias=False, padding="same", kernel_initializer=WEIGHT_INIT))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.BatchNormalization())
+    
+    
+    model.add(tf.keras.layers.Conv2DTranspose(3, (5,5), strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT,
+                                     activation="tanh"
+                                    ))
+              # Tanh activation function compress values between -1 and 1. 
+              # This is why we compressed our images between -1 and 1 in readImage function.
+    # assert model.output_shape == (None,128,128,3)
+    
+    return model
+
+
+# In[ ]:
+
+
+# create discriminator model
+def build_discriminator(input_shape):
+    model = tf.keras.Sequential()
+    
+    model.add(tf.keras.layers.Conv2D(64,(5,5),strides=(2,2),padding="same", input_shape=input_shape))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Dropout(0.3))
+    
+    model.add(tf.keras.layers.Conv2D(128,(5,5),strides=(2,2),padding="same"))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Dropout(0.3))
+    
+    model.add(tf.keras.layers.Conv2D(256,(5,5),strides=(2,2),padding="same"))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Dropout(0.3))
+    
+    model.add(tf.keras.layers.Conv2D(512,(5,5),strides=(2,2),padding="same"))
+    model.add(tf.keras.layers.LeakyReLU())
+    model.add(tf.keras.layers.Dropout(0.3))
+    
+    model.add(tf.keras.layers.Flatten())
+    model.add(tf.keras.layers.Dense(1))
+    
+    return model
+
+
+# In[ ]:
+
+
+# we'll use cross entropy loss
+cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.1)
+
+def generator_loss(fake_output):
+    # First argument of loss is real labels
+    # We've labeled our images as 1 (real) because
+    # we're trying to fool discriminator
+    return cross_entropy(tf.ones_like(fake_output),fake_output)
+
+
+def discriminator_loss(real_images,fake_images):
+    real_loss = cross_entropy(tf.ones_like(real_images),real_images)
+    fake_loss = cross_entropy(tf.zeros_like(fake_images),fake_images)
+    total_loss = real_loss + fake_loss
+    return total_loss
+
+
+# In[ ]:
+
+
+input_shape = (IMG_H, IMG_W, IMG_C)
+
+d_model = build_discriminator(input_shape)
+g_model = build_generator((latent_dim, ))
+d_model.compile()
+g_model.compile()
+
+g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+
+
+# In[ ]:
+
+
+for meta_iter in range(meta_iters):
+    frac_done = meta_iter / meta_iters
+    cur_meta_step_size = (1 - frac_done) * meta_step_size
+    # Temporarily save the weights from the model.
+    d_old_vars = d_model.get_weights()
+    g_old_vars = g_model.get_weights()
+    # Get a sample from the full dataset.
+    mini_dataset = train_dataset.get_mini_dataset(
+        inner_batch_size, inner_iters, train_shots, classes
+    )
+    for images, labels in mini_dataset:
+        
+        noise = tf.random.normal([inner_batch_size, latent_dim])
+        with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+            # Generator generated images
+            generated_images = g_model(noise, training=True)
+
+            # We've sent our real and fake images to the discriminator
+            # and taken the decisions of it.
+            real_output = d_model(images,training=True)
+            fake_output = d_model(generated_images,training=True)
+
+            # We've computed losses of generator and discriminator
+            gen_loss = generator_loss(fake_output)
+            disc_loss = discriminator_loss(real_output,fake_output)
+
+        # We've computed gradients of networks and updated variables using those gradients.
+        gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
+        gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
+        d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
+        g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
+        
+        
+        
+    d_new_vars = d_model.get_weights()
+    g_new_vars = g_model.get_weights()
+    
+    # Perform SGD for the meta step.
+    for var in range(len(d_new_vars)):
+        d_new_vars[var] = d_old_vars[var] + (
+            (d_new_vars[var] - d_old_vars[var]) * cur_meta_step_size
+        )
+    
+    
+    
+    for var in range(len(g_new_vars)):
+        g_new_vars[var] = g_old_vars[var] + (
+            (g_new_vars[var] - g_old_vars[var]) * cur_meta_step_size
+        )
+    
+    
+    
+    # After the meta-learning step, reload the newly-trained weights into the model.
+    g_model.set_weights(g_new_vars)
+    d_model.set_weights(d_new_vars)
+    # Evaluation loop
+    if meta_iter % eval_interval == 0:
+        mini_dataset = test_dataset.get_mini_dataset(
+            inner_batch_size, inner_iters, train_shots, classes
+        )
+        for images, labels in mini_dataset:
+            noise = tf.random.normal([inner_batch_size, latent_dim])
+            with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+                # Generator generated images
+                generated_images = g_model(noise, training=True)
+
+                # We've sent our real and fake images to the discriminator
+                # and taken the decisions of it.
+                real_output = d_model(images,training=True)
+                fake_output = d_model(generated_images,training=True)
+
+                # We've computed losses of generator and discriminator
+                gen_loss = generator_loss(fake_output)
+                disc_loss = discriminator_loss(real_output,fake_output)
+
+            # We've computed gradients of networks and updated variables using those gradients.
+            gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
+            gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
+
+            g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
+            d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))   
+        if meta_iter % 100 == 0:
+            print(
+                "generate image in batch %d:" % (meta_iter)
+            )
+            noise = np.random.normal(size=(inner_batch_size, latent_dim))
+            examples = g_model.predict(noise)
+            save_plot(examples, epoch, int(np.sqrt(inner_batch_size)))
+    
+    
+
+
+# In[ ]:
+
+
+noise = tf.random.normal([inner_batch_size, latent_dim])
+examples = g_model.predict(noise)
+save_plot(examples, "few-shot-gan", int(np.sqrt(inner_batch_size)))
+    # Train on the samples and get the resulting accuracies.
+
+
+# In[ ]:
+
+
+
+
