@@ -357,7 +357,7 @@ for meta_iter in range(meta_iters):
             )
             noise = np.random.normal(size=(inner_batch_size, latent_dim))
             examples = g_model.predict(noise)
-            save_plot(examples, epoch, int(np.sqrt(inner_batch_size)))
+            save_plot(examples, meta_iter, int(np.sqrt(inner_batch_size)))
     
     
 
