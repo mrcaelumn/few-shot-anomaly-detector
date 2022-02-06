@@ -31,7 +31,7 @@ meta_step_size = 0.25
 inner_batch_size = 25
 eval_batch_size = 25
 
-meta_iters = 2000
+meta_iters = 100000
 eval_iters = 5
 inner_iters = 4
 
@@ -239,6 +239,9 @@ def build_discriminator(input_shape):
 # we'll use cross entropy loss
 cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True, label_smoothing=0.1)
 
+def wasserstein_loss(real_images, fake_images):
+	return tf.keras.backend.mean(real_images * fake_images)
+
 def generator_loss(fake_output):
     # First argument of loss is real labels
     # We've labeled our images as 1 (real) because
@@ -330,16 +333,20 @@ for meta_iter in range(meta_iters):
         mini_dataset = test_dataset.get_mini_dataset(
             inner_batch_size, inner_iters, train_shots, classes
         )
+        
+        d_old_vars = d_model.get_weights()
+        g_old_vars = g_model.get_weights()
+        
         for images, labels in mini_dataset:
             noise = tf.random.normal([inner_batch_size, latent_dim])
             with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
                 # Generator generated images
-                generated_images = g_model(noise, training=True)
+                generated_images = g_model(noise, training=False)
 
                 # We've sent our real and fake images to the discriminator
                 # and taken the decisions of it.
-                real_output = d_model(images,training=True)
-                fake_output = d_model(generated_images,training=True)
+                real_output = d_model(images, training=False)
+                fake_output = d_model(generated_images, training=False)
 
                 # We've computed losses of generator and discriminator
                 gen_loss = generator_loss(fake_output)
@@ -350,7 +357,11 @@ for meta_iter in range(meta_iters):
             gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
 
             g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
-            d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))   
+            d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
+        
+        g_model.set_weights(g_old_vars)
+        d_model.set_weights(d_old_vars)
+        
         if meta_iter % 100 == 0:
             print(
                 "generate image in batch %d:" % (meta_iter)
