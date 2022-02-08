@@ -25,7 +25,7 @@ WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 
 latent_dim = 128
     
-learning_rate = 0.0001
+learning_rate = 0.00001
 meta_step_size = 0.25
 
 inner_batch_size = 25
@@ -341,12 +341,12 @@ for meta_iter in range(meta_iters):
             noise = tf.random.normal([inner_batch_size, latent_dim])
             with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
                 # Generator generated images
-                generated_images = g_model(noise, training=False)
+                generated_images = g_model(noise, training=True)
 
                 # We've sent our real and fake images to the discriminator
                 # and taken the decisions of it.
-                real_output = d_model(images, training=False)
-                fake_output = d_model(generated_images, training=False)
+                real_output = d_model(images, training=True)
+                fake_output = d_model(generated_images, training=True)
 
                 # We've computed losses of generator and discriminator
                 gen_loss = generator_loss(fake_output)
@@ -359,8 +359,8 @@ for meta_iter in range(meta_iters):
             g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
             d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
         
-        g_model.set_weights(g_old_vars)
-        d_model.set_weights(d_old_vars)
+        # g_model.set_weights(g_old_vars)
+        # d_model.set_weights(d_old_vars)
         
         if meta_iter % 100 == 0:
             print(
