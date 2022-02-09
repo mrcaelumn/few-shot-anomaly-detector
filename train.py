@@ -195,7 +195,7 @@ def build_generator(input_shape):
     
     
     model.add(tf.keras.layers.Conv2DTranspose(3, (5,5), strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT,
-                                     activation="tanh"
+                                     activation="softmax"
                                     ))
               # Tanh activation function compress values between -1 and 1. 
               # This is why we compressed our images between -1 and 1 in readImage function.
