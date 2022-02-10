@@ -37,8 +37,28 @@ inner_iters = 4
 
 eval_interval = 1
 train_shots = 20
-shots = 5
-classes = 5
+shots = 10
+classes = 10
+
+
+# In[ ]:
+
+
+class GCAdam(tf.keras.optimizers.Adam):
+    def get_gradients(self, loss, params):
+        # We here just provide a modified get_gradients() function since we are
+        # trying to just compute the centralized gradients.
+
+        grads = []
+        gradients = super().get_gradients()
+        for grad in gradients:
+            grad_len = len(grad.shape)
+            if grad_len > 1:
+                axis = list(range(grad_len - 1))
+                grad -= tf.reduce_mean(grad, axis=axis, keep_dims=True)
+            grads.append(grad)
+
+        return grads
 
 
 # In[ ]:
@@ -195,7 +215,7 @@ def build_generator(input_shape):
     
     
     model.add(tf.keras.layers.Conv2DTranspose(3, (5,5), strides=(2,2),use_bias=False,padding="same",kernel_initializer=WEIGHT_INIT,
-                                     activation="softmax"
+                                     activation="tanh"
                                     ))
               # Tanh activation function compress values between -1 and 1. 
               # This is why we compressed our images between -1 and 1 in readImage function.
@@ -266,8 +286,8 @@ g_model = build_generator((latent_dim, ))
 d_model.compile()
 g_model.compile()
 
-g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
