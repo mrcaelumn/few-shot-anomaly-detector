@@ -86,7 +86,7 @@ class Dataset:
         # Download the tfrecord files containing the omniglot data and convert to a
         # dataset.
         split = "train" if training else "test"
-        ds = tfds.load("tf_flowers", split=split, as_supervised=True, shuffle_files=False)
+        ds = tfds.load("tf_flowers", split="train", as_supervised=True, shuffle_files=False)
         # Iterate over the dataset to get each individual image and its class,
         # and put that data into a dictionary.
         self.data = {}
@@ -95,7 +95,7 @@ class Dataset:
             # This function will shrink the Omniglot images to the desired size,
             # scale pixel values and convert the RGB image to grayscale
             image = tf.image.convert_image_dtype(image, tf.float32)
-            image = tf.image.rgb_to_grayscale(image)
+            # image = tf.image.rgb_to_grayscale(image)
             image = tf.image.resize(image, [IMG_H, IMG_W])
             return image, label
 
@@ -171,7 +171,7 @@ for a in range(5):
         temp_image = np.clip(temp_image, 0, 255).astype("uint8")
         if b == 2:
             axarr[a, b].set_title("Class : " + sample_keys[a])
-        axarr[a, b].imshow(temp_image, cmap="gray")
+        axarr[a, b].imshow(temp_image)
         axarr[a, b].xaxis.set_visible(False)
         axarr[a, b].yaxis.set_visible(False)
 plt.show()
