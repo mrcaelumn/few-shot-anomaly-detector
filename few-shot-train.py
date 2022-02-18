@@ -297,7 +297,7 @@ test_dataset = Dataset("data/numbers/test_data", training=False)
 _, axarr = plt.subplots(nrows=2, ncols=5, figsize=(20, 20))
 
 sample_keys = list(test_dataset.data.keys())
-print(sample_keys)
+# print(sample_keys)
 for a in range(2):
     for b in range(5):
         temp_image = test_dataset.data[sample_keys[a]][b]
@@ -496,13 +496,11 @@ for meta_iter in range(meta_iters):
         
         if meta_iter % 100 == 0:
             # range between 0-1
-            anomaly_weight = 0.8
+            anomaly_weight = 0.1
 
             scores_ano = []
             real_label = []
-            rec_loss_list = []
-            feat_loss_list = []
-            ssim_loss_list = []
+
             
             i = 0
             test_ds = test_dataset.get_dataset(1)
@@ -532,37 +530,28 @@ for meta_iter in range(meta_iters):
 
                 scores_ano = np.append(scores_ano, score.numpy())
                 real_label = np.append(real_label, labels.numpy()[0])
-
-                rec_loss_list = np.append(rec_loss_list, loss_rec)
-                feat_loss_list = np.append(feat_loss_list, loss_feat)
-                ssim_loss_list = np.append(ssim_loss_list, loss_ssim)
         
             ''' Scale scores vector between [0, 1]'''
             scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
-            # label_axis = ["recon_loss", "scores_anomaly"]
-            # plot_loss_with_rlabel(rec_loss_list, scores_ano, real_label, name_model, "anomaly_score", label_axis)
 
-            auc_out, threshold = roc(real_label, scores_ano, name_model)
-            # print("auc: ", auc_out)
-            # print("threshold: ", threshold)
+            auc_out, _ = roc(real_label, scores_ano, name_model)
 
 
 
-            scores_ano = (scores_ano > threshold).astype(int)
-            # print("real label: ", real_label)
-            # print("anomaly score: ", scores_ano)
-            cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
+
+#             scores_ano = (scores_ano > threshold).astype(int)
+#             # print("real label: ", real_label)
+#             # print("anomaly score: ", scores_ano)
+#             cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
             
-            TP = cm[1][1]
-            FP = cm[0][1]
-            FN = cm[1][0]
-            TN = cm[0][0]
-            # plot_confusion_matrix(cm, class_names, title=name_model)
-            # label_axis = ["ssim_loss", "recon_loss"]
-            # plot_loss_with_rlabel(ssim_loss_list, rec_loss_list, real_label, name_model, "recontruction_loss", label_axis)
+#             # TP = cm[1][1]
+#             # FP = cm[0][1]
+#             # FN = cm[1][0]
+#             # TN = cm[0][0]
+           
 
-            diagonal_sum = cm.trace()
-            sum_of_all_elements = cm.sum()
+#             diagonal_sum = cm.trace()
+#             sum_of_all_elements = cm.sum()
 
             # print("Accuracy: ", diagonal_sum / sum_of_all_elements )
     #         print("False Alarm Rate: ", FP/(FP+TP))
@@ -574,6 +563,6 @@ for meta_iter in range(meta_iters):
     #         print("F1-Score: ", f1_score(real_label, scores_ano))
         
             print(
-                "batch %d: AUC=%f ACC=%f" % (meta_iter, auc_out, diagonal_sum / sum_of_all_elements)
+                "batch %d: AUC=%f" % (meta_iter, auc_out)
             )
 
