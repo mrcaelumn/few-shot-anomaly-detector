@@ -28,8 +28,6 @@ IMG_C = 3  ## Change this to 1 for grayscale.
 # Weight initializers for the Generator network
 WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 AUTOTUNE = tf.data.AUTOTUNE
-
-latent_dim = 128
     
 learning_rate = 0.00001
 meta_step_size = 0.25
@@ -37,7 +35,7 @@ meta_step_size = 0.25
 inner_batch_size = 25
 eval_batch_size = 25
 
-meta_iters = 100000
+meta_iters = 100
 eval_iters = 5
 inner_iters = 10
 
@@ -46,7 +44,9 @@ train_shots = 20
 shots = 20
 classes = 10
 
-name_model = "prototype_one_few_show"
+name_model = "prototype_one_few_shot"
+g_model_path = "saved_model/g_"+name_model+"_"+str(meta_iters)+".h5"
+d_model_path = "saved_model/d_"+name_model+"_"+str(meta_iters)+".h5"
 
 
 # In[ ]:
@@ -169,6 +169,21 @@ def save_plot(examples, epoch, n):
     filename = f"samples/generated_plot_epoch-{epoch}.png"
     plt.savefig(filename)
     plt.close()
+
+
+# In[ ]:
+
+
+def plot_epoch_result(iters, loss, name, model_name, colour):
+    plt.plot(epochs, loss, colour, label=name)
+#     plt.plot(epochs, disc_loss, 'b', label='Discriminator loss')
+    plt.title(name)
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig(model_name+ '_'+name+'_epoch_result.png')
+    plt.show()
+    plt.clf()
 
 
 # In[ ]:
@@ -419,6 +434,15 @@ REC_REG_RATE_LF = 50
 SSIM_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
+gen_loss_list = []
+disc_loss_list = []
+iter_list = []
+auc_list = []
+
+
+# In[ ]:
+
+
 for meta_iter in range(meta_iters):
     frac_done = meta_iter / meta_iters
     cur_meta_step_size = (1 - frac_done) * meta_step_size
@@ -429,6 +453,8 @@ for meta_iter in range(meta_iters):
     mini_dataset = train_dataset.get_mini_dataset(
         inner_batch_size, inner_iters, train_shots, classes
     )
+    gen_loss_out = 0.0
+    disc_loss_out = 0.0
     for images, labels in mini_dataset:
         
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
@@ -458,17 +484,19 @@ for meta_iter in range(meta_iters):
             gen_loss = tf.reduce_mean( (adv_loss * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
             disc_loss = tf.reduce_mean( (adv_loss * ADV_REG_RATE_LF) + (loss_feat *FEAT_REG_RATE_LF) )
 #             disc_loss = adv_loss
-
+        
         gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
         gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
         
-
+        gen_loss_out = gen_loss
+        disc_loss_out = disc_loss
         
         d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
         g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
         
-        
-        
+    
+    
+     
     d_new_vars = d_model.get_weights()
     g_new_vars = g_model.get_weights()
     
@@ -495,6 +523,11 @@ for meta_iter in range(meta_iters):
     if meta_iter % eval_interval == 0:
         
         if meta_iter % 100 == 0:
+            
+            iter_list = np.append(iter_list, meta_iter)
+            gen_loss_list = np.append(gen_loss_list, gen_loss_out)
+            disc_loss_list = np.append(disc_loss_list, disc_loss_out)
+            
             # range between 0-1
             anomaly_weight = 0.1
 
@@ -535,7 +568,7 @@ for meta_iter in range(meta_iters):
             scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
 
             auc_out, _ = roc(real_label, scores_ano, name_model)
-
+            auc_list = np.append(auc_list, auc_out)
 
 
 
@@ -561,8 +594,20 @@ for meta_iter in range(meta_iters):
     #         print("recall_score: ", TP/(TP+FN))
     # #         F1 = 2 * (precision * recall) / (precision + recall)
     #         print("F1-Score: ", f1_score(real_label, scores_ano))
-        
+            
             print(
-                "batch %d: AUC=%f" % (meta_iter, auc_out)
+                "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
             )
+            
+            # save model's weights
+            g_model.save(g_model_path)
+            d_model.save(d_model_path)
+
+
+# In[ ]:
+
+
+plot_epoch_result(iter_list, gen_loss_list, "Generator_Loss", name_model, "g")
+plot_epoch_result(iter_list, disc_loss_list, "Discriminator_Loss", name_model, "r")
+plot_epoch_result(iter_list, auc_list, "AUC", name_model, "b")
 
