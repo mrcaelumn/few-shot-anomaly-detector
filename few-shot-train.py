@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 import logging, os
@@ -23,7 +23,7 @@ from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
 
 
-# In[2]:
+# In[ ]:
 
 
 IMG_H = 64
@@ -47,14 +47,14 @@ inner_iters = 10
 eval_interval = 1
 train_shots = 20
 shots = 10
-classes = 10
+classes = 1
 
-name_model = "prototype_one_few_shot"
+name_model = "prototype_few_shot_anomaly_detection"
 g_model_path = "saved_model/g_"+name_model+"_"+str(meta_iters)+".h5"
 d_model_path = "saved_model/d_"+name_model+"_"+str(meta_iters)+".h5"
 
 
-# In[3]:
+# In[ ]:
 
 
 # class for SSIM loss function
@@ -115,7 +115,7 @@ def discriminator_wassertein_loss(real_img, fake_img):
     return tf.reduce_mean(fake) - tf.reduce_mean(real)
 
 
-# In[4]:
+# In[ ]:
 
 
 ''' calculate the auc value for lables and scores'''
@@ -135,7 +135,7 @@ def roc(labels, scores, name_model):
     return roc_auc, optimal_threshold
 
 
-# In[5]:
+# In[ ]:
 
 
 # delcare all loss function that we will use
@@ -154,7 +154,7 @@ feat = FeatureLoss()
 ssim = SSIMLoss()
 
 
-# In[6]:
+# In[ ]:
 
 
 class GCAdam(tf.keras.optimizers.Adam):
@@ -174,7 +174,7 @@ class GCAdam(tf.keras.optimizers.Adam):
         return grads
 
 
-# In[7]:
+# In[ ]:
 
 
 def save_plot(examples, epoch, n):
@@ -188,7 +188,7 @@ def save_plot(examples, epoch, n):
     plt.close()
 
 
-# In[8]:
+# In[ ]:
 
 
 def plot_epoch_result(iters, loss, name, model_name, colour):
@@ -203,7 +203,7 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.clf()
 
 
-# In[9]:
+# In[ ]:
 
 
 def read_data_with_labels(filepath, class_names):
@@ -240,7 +240,7 @@ def extraction(image, label):
     return img, label
 
 
-# In[10]:
+# In[ ]:
 
 
 class Dataset:
@@ -323,7 +323,7 @@ train_dataset = Dataset("data/numbers/train_data", training=True)
 test_dataset = Dataset("data/numbers/test_data", training=False)
 
 
-# In[11]:
+# In[ ]:
 
 
 _, axarr = plt.subplots(nrows=2, ncols=5, figsize=(20, 20))
@@ -344,7 +344,7 @@ for a in range(2):
 plt.show()
 
 
-# In[12]:
+# In[ ]:
 
 
 def conv_block(input, num_filters):
@@ -365,7 +365,7 @@ def decoder_block(input, skip_features, num_filters):
     return x
 
 
-# In[13]:
+# In[ ]:
 
 
 # create generator model based on resnet50 and unet network
@@ -402,7 +402,7 @@ def build_generator_resnet50_unet(input_shape):
     return model
 
 
-# In[14]:
+# In[ ]:
 
 
 # create discriminator model
@@ -454,7 +454,7 @@ def gradient_penalty(discriminator, batch_size, real_images, fake_images):
     return gp
 
 
-# In[15]:
+# In[ ]:
 
 
 input_shape = (IMG_H, IMG_W, IMG_C)
@@ -469,7 +469,7 @@ g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
-# In[16]:
+# In[ ]:
 
 
 ADV_REG_RATE_LF = 1
