@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
+
+import logging, os
+
+logging.disable(logging.WARNING)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import numpy as np
 import random
@@ -18,7 +23,7 @@ from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
 
 
-# In[ ]:
+# In[2]:
 
 
 IMG_H = 64
@@ -29,19 +34,19 @@ IMG_C = 3  ## Change this to 1 for grayscale.
 WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 AUTOTUNE = tf.data.AUTOTUNE
     
-learning_rate = 0.00001
+learning_rate = 0.0001
 meta_step_size = 0.25
 
 inner_batch_size = 25
 eval_batch_size = 25
 
 meta_iters = 100
-eval_iters = 5
+eval_iters = 1
 inner_iters = 10
 
 eval_interval = 1
 train_shots = 20
-shots = 20
+shots = 10
 classes = 10
 
 name_model = "prototype_one_few_shot"
@@ -49,7 +54,7 @@ g_model_path = "saved_model/g_"+name_model+"_"+str(meta_iters)+".h5"
 d_model_path = "saved_model/d_"+name_model+"_"+str(meta_iters)+".h5"
 
 
-# In[ ]:
+# In[3]:
 
 
 # class for SSIM loss function
@@ -96,10 +101,21 @@ class AdversarialLoss(tf.keras.losses.Loss):
         logits_in = tf.cast(logits_in, labels_in.dtype)
         # Loss 4: FEATURE Loss
         return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_in, labels=labels_in))
-        
+
+# function for Generator Wassertein loss function
+
+def generator_wassertein_loss(fake_img):
+    fake = tf.convert_to_tensor(fake_img)
+    return -tf.reduce_mean(fake)
+
+# function for Discriminator Wassertein loss function
+def discriminator_wassertein_loss(real_img, fake_img):
+    fake = tf.convert_to_tensor(fake_img)
+    real = tf.cast(real_img, fake.dtype)
+    return tf.reduce_mean(fake) - tf.reduce_mean(real)
 
 
-# In[ ]:
+# In[4]:
 
 
 ''' calculate the auc value for lables and scores'''
@@ -119,14 +135,15 @@ def roc(labels, scores, name_model):
     return roc_auc, optimal_threshold
 
 
-# In[ ]:
+# In[5]:
 
 
 # delcare all loss function that we will use
 
 # for adversarial loss
 # cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-cross_entropy = AdversarialLoss()
+# cross_entropy = AdversarialLoss()
+
 # L1 Loss
 mae = tf.keras.losses.MeanAbsoluteError()
 # L2 Loss
@@ -137,7 +154,7 @@ feat = FeatureLoss()
 ssim = SSIMLoss()
 
 
-# In[ ]:
+# In[6]:
 
 
 class GCAdam(tf.keras.optimizers.Adam):
@@ -157,7 +174,7 @@ class GCAdam(tf.keras.optimizers.Adam):
         return grads
 
 
-# In[ ]:
+# In[7]:
 
 
 def save_plot(examples, epoch, n):
@@ -171,7 +188,7 @@ def save_plot(examples, epoch, n):
     plt.close()
 
 
-# In[ ]:
+# In[8]:
 
 
 def plot_epoch_result(iters, loss, name, model_name, colour):
@@ -186,7 +203,7 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.clf()
 
 
-# In[ ]:
+# In[9]:
 
 
 def read_data_with_labels(filepath, class_names):
@@ -223,7 +240,7 @@ def extraction(image, label):
     return img, label
 
 
-# In[ ]:
+# In[10]:
 
 
 class Dataset:
@@ -306,7 +323,7 @@ train_dataset = Dataset("data/numbers/train_data", training=True)
 test_dataset = Dataset("data/numbers/test_data", training=False)
 
 
-# In[ ]:
+# In[11]:
 
 
 _, axarr = plt.subplots(nrows=2, ncols=5, figsize=(20, 20))
@@ -327,7 +344,7 @@ for a in range(2):
 plt.show()
 
 
-# In[ ]:
+# In[12]:
 
 
 def conv_block(input, num_filters):
@@ -348,7 +365,7 @@ def decoder_block(input, skip_features, num_filters):
     return x
 
 
-# In[ ]:
+# In[13]:
 
 
 # create generator model based on resnet50 and unet network
@@ -385,7 +402,7 @@ def build_generator_resnet50_unet(input_shape):
     return model
 
 
-# In[ ]:
+# In[14]:
 
 
 # create discriminator model
@@ -404,7 +421,6 @@ def build_discriminator(inputs):
     x = tf.keras.layers.Flatten()(x)
     output = tf.keras.layers.Dense(1, activation="tanh")(x)
     
-    
     model = tf.keras.models.Model(inputs, outputs = [feature, output])
     
     return model
@@ -412,6 +428,33 @@ def build_discriminator(inputs):
 
 
 # In[ ]:
+
+
+def gradient_penalty(discriminator, batch_size, real_images, fake_images):
+    """ Calculates the gradient penalty.
+
+    This loss is calculated on an interpolated image
+    and added to the discriminator loss.
+    """
+    # Get the interpolated image
+    alpha = tf.random.normal([batch_size, 1, 1, 1], 0.0, 1.0)
+    diff = fake_images - real_images
+    interpolated = real_images + alpha * diff
+
+    with tf.GradientTape() as gp_tape:
+        gp_tape.watch(interpolated)
+        # 1. Get the discriminator output for this interpolated image.
+        pred = discriminator(interpolated, training=True)
+
+    # 2. Calculate the gradients w.r.t to this interpolated image.
+    grads = gp_tape.gradient(pred, [interpolated])[0]
+    # 3. Calculate the norm of the gradients.
+    norm = tf.sqrt(tf.reduce_sum(tf.square(grads), axis=[1, 2, 3]))
+    gp = tf.reduce_mean((norm - 1.0) ** 2)
+    return gp
+
+
+# In[15]:
 
 
 input_shape = (IMG_H, IMG_W, IMG_C)
@@ -426,7 +469,7 @@ g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
-# In[ ]:
+# In[16]:
 
 
 ADV_REG_RATE_LF = 1
@@ -464,12 +507,12 @@ for meta_iter in range(meta_iters):
             # print(generated_images.shape)
             feature_fake, label_fake = d_model(reconstructed_images, training=True)
 
-            # Loss 1: ADVERSARIAL loss
-            real_loss = cross_entropy(label_real, tf.ones_like(label_real))
-            fake_loss = cross_entropy(label_fake, tf.zeros_like(label_fake))
-            adv_loss = real_loss + fake_loss
+       
+            # use wessertein loss
+            loss_gen_w = generator_wassertein_loss(label_fake)
+
+            loss_disc_w = discriminator_wassertein_loss(label_real, label_fake)
             
-#             gen_adv_loss = cross_entropy(fake_output, tf.ones_like(fake_output))
             
             # Loss 2: RECONSTRUCTION loss (L1)
             loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
@@ -481,8 +524,8 @@ for meta_iter in range(meta_iters):
 #             loss_feat = tf.reduce_mean(mse(real_output, fake_output))
             loss_feat = feat(feature_real, feature_fake)
 
-            gen_loss = tf.reduce_mean( (adv_loss * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
-            disc_loss = tf.reduce_mean( (adv_loss * ADV_REG_RATE_LF) + (loss_feat *FEAT_REG_RATE_LF) )
+            gen_loss = tf.reduce_mean( (loss_gen_w * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
+            disc_loss = tf.reduce_mean( (loss_disc_w * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
 #             disc_loss = adv_loss
         
         gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
@@ -549,8 +592,7 @@ for meta_iter in range(meta_iters):
                 feature_real, label_real  = d_model(images, training=False)
                 # print(generated_images.shape)
                 feature_fake, label_fake = d_model(reconstructed_images, training=False)
-
-
+                
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
 
@@ -610,4 +652,10 @@ for meta_iter in range(meta_iters):
 plot_epoch_result(iter_list, gen_loss_list, "Generator_Loss", name_model, "g")
 plot_epoch_result(iter_list, disc_loss_list, "Discriminator_Loss", name_model, "r")
 plot_epoch_result(iter_list, auc_list, "AUC", name_model, "b")
+
+
+# In[ ]:
+
+
+
 
