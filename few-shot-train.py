@@ -40,7 +40,7 @@ meta_step_size = 0.25
 inner_batch_size = 25
 eval_batch_size = 25
 
-meta_iters = 100
+meta_iters = 2000
 eval_iters = 1
 inner_iters = 10
 
@@ -192,13 +192,13 @@ def save_plot(examples, epoch, n):
 
 
 def plot_epoch_result(iters, loss, name, model_name, colour):
-    plt.plot(epochs, loss, colour, label=name)
+    plt.plot(iters, loss, colour, label=name)
 #     plt.plot(epochs, disc_loss, 'b', label='Discriminator loss')
     plt.title(name)
-    plt.xlabel('Epochs')
+    plt.xlabel('Iters')
     plt.ylabel('Loss')
     plt.legend()
-    plt.savefig(model_name+ '_'+name+'_epoch_result.png')
+    plt.savefig(model_name+ '_'+name+'_iters_result.png')
     plt.show()
     plt.clf()
 
