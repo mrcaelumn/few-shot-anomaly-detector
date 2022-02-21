@@ -395,7 +395,7 @@ def build_generator_resnet50_unet(input_shape):
     d4 = decoder_block(d3, s1, x)                      ## (256 x 256)
     
     """ Output """
-    outputs = tf.keras.layers.Conv2D(3, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
     # outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d4)
 
     model = tf.keras.models.Model(inputs, outputs)
