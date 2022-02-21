@@ -34,7 +34,7 @@ IMG_C = 3  ## Change this to 1 for grayscale.
 WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 AUTOTUNE = tf.data.AUTOTUNE
     
-learning_rate = 0.0001
+learning_rate = 0.001
 meta_step_size = 0.25
 
 inner_batch_size = 25
@@ -45,7 +45,7 @@ eval_iters = 1
 inner_iters = 10
 
 eval_interval = 1
-train_shots = 20
+train_shots = 25
 shots = 10
 classes = 1
 
@@ -439,7 +439,7 @@ def gradient_penalty(discriminator, batch_size, real_images, fake_images):
     and added to the discriminator loss.
     """
     # Get the interpolated image
-    alpha = tf.random.normal([batch_size, 1, 1, 1], 0.0, 1.0)
+    alpha = tf.random.normal([batch_size, 1, 1, IMG_C], 0.0, 1.0)
     diff = fake_images - real_images
     interpolated = real_images + alpha * diff
 
@@ -479,6 +479,8 @@ REC_REG_RATE_LF = 50
 SSIM_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
+GP_LF = 10
+
 gen_loss_list = []
 disc_loss_list = []
 iter_list = []
@@ -513,7 +515,7 @@ for meta_iter in range(meta_iters):
             # use wessertein loss
             loss_gen_w = generator_wassertein_loss(label_fake)
 
-            loss_disc_w = discriminator_wassertein_loss(label_real, label_fake)
+            loss_disc_w = discriminator_wassertein_loss(label_real, label_fake) + gradient_penalty(d_model, inner_batch_size, images, reconstructed_images) * GP_LF
             
             
             # Loss 2: RECONSTRUCTION loss (L1)
