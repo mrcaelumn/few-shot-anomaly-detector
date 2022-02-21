@@ -396,6 +396,7 @@ def build_generator_resnet50_unet(input_shape):
     
     """ Output """
     outputs = tf.keras.layers.Conv2D(3, 1, padding="same", activation="tanh")(d4)
+    # outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d4)
 
     model = tf.keras.models.Model(inputs, outputs)
 
@@ -419,7 +420,8 @@ def build_discriminator(inputs):
     feature = x
     
     x = tf.keras.layers.Flatten()(x)
-    output = tf.keras.layers.Dense(1, activation="tanh")(x)
+    # output = tf.keras.layers.Dense(1, activation="tanh")(x)
+    output = tf.keras.layers.Dense(1)(x)
     
     model = tf.keras.models.Model(inputs, outputs = [feature, output])
     
