@@ -26,8 +26,8 @@ import matplotlib.patches as mpatches
 # In[ ]:
 
 
-IMG_H = 64
-IMG_W = 64
+IMG_H = 128
+IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.
 
 # Weight initializers for the Generator network
@@ -238,13 +238,13 @@ def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
-    img = tf.io.decode_bmp(img, channels=IMG_C)
+    img = tf.io.decode_png(img, channels=IMG_C)
     img = prep_stage(img)
     img = tf.cast(img, tf.float32)
     # normalize to the range -1,1
-    # img = (img - 127.5) / 127.5
+    img = (img - 127.5) / 127.5
     # normalize to the range 0-1
-    img /= 255.0
+    # img /= 255.0
 
     return img, label
 
@@ -460,7 +460,7 @@ def build_generator_resnet50_unet(input_shape):
     d4 = decoder_block(d3, s1, x)                      ## (256 x 256)
     
     """ Output """
-    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="softmax")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
     # outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d4)
 
     model = tf.keras.models.Model(inputs, outputs)
@@ -485,8 +485,8 @@ def build_discriminator(inputs):
     feature = x
     
     x = tf.keras.layers.Flatten()(x)
-    # output = tf.keras.layers.Dense(1, activation="tanh")(x)
-    output = tf.keras.layers.Dense(1)(x)
+    output = tf.keras.layers.Dense(1, activation="tanh")(x)
+    # output = tf.keras.layers.Dense(1)(x)
     
     model = tf.keras.models.Model(inputs, outputs = [feature, output])
     
@@ -540,7 +540,7 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 ADV_REG_RATE_LF = 1
-REC_REG_RATE_LF = 50
+REC_REG_RATE_LF = 10
 SSIM_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
@@ -582,6 +582,8 @@ if TRAIN:
                 # use wessertein loss
                 loss_gen_w = generator_wassertein_loss(label_fake)
 
+                # loss_disc_w = discriminator_wassertein_loss(label_real, label_fake)
+                
                 loss_disc_w = discriminator_wassertein_loss(label_real, label_fake) + gradient_penalty(d_model, inner_batch_size, images, reconstructed_images) * GP_LF
 
 

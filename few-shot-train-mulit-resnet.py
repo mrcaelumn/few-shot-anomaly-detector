@@ -21,22 +21,24 @@ import matplotlib.patches as mpatches
 # In[ ]:
 
 
-IMG_H = 64
-IMG_W = 64
+IMG_H = 128
+IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.
 
 # Weight initializers for the Generator network
 WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 AUTOTUNE = tf.data.AUTOTUNE
-    
+
+TRAIN = True
+
 learning_rate = 0.001
 meta_step_size = 0.25
 
 inner_batch_size = 25
 eval_batch_size = 25
 
-meta_iters = 100
-eval_iters = 5
+meta_iters = 3000
+eval_iters = 1
 inner_iters = 10
 
 eval_interval = 1
@@ -44,9 +46,14 @@ train_shots = 25
 shots = 10
 classes = 1
 
-name_model = "prototype_one_few_shot"
-g_model_path = "saved_model/g_"+name_model+"_"+str(meta_iters)+".h5"
-d_model_path = "saved_model/d_"+name_model+"_"+str(meta_iters)+".h5"
+dataset_name = "numbers"
+name_model = str(IMG_H)+"_"+dataset_name+"_few_shot_anomaly_detection"+"_"+str(meta_iters)
+g_model_path = "saved_model/"+name_model+"_g_model.h5"
+d_model_path = "saved_model/"+name_model+"_d_model.h5"
+
+
+train_data_path = "data/"+dataset_name+"/train_data"
+test_data_path = "data/"+dataset_name+"/test_data"
 
 
 # In[ ]:
@@ -224,13 +231,69 @@ def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
-    img = tf.io.decode_bmp(img, channels=IMG_C)
+    img = tf.io.decode_png(img, channels=IMG_C)
     img = prep_stage(img)
     img = tf.cast(img, tf.float32)
     #     rescailing image from 0,255 to -1,1
     img = (img - 127.5) / 127.5
 
     return img, label
+
+
+# In[ ]:
+
+
+def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath, test_data_path):
+    print("Start Checking Reconstructed Image")
+    g_model_inner.load_weights(g_filepath)
+    d_model_inner.load_weights(d_filepath)
+    paths = {
+        "normal": test_data_path+"/normal/normal.png",
+        "defect": test_data_path+"/defect/defect.png",
+    }
+
+    for i, v in paths.items():
+        print(i,v)
+
+        width=IMG_W
+        height=IMG_H
+        rows = 1
+        cols = 3
+        axes=[]
+        fig = plt.figure()
+
+
+        img = tf.io.read_file(v)
+        img = tf.io.decode_png(img, channels=IMG_C)
+        img = prep_stage(img)
+        name_subplot = mode+'_original_'+i
+        axes.append( fig.add_subplot(rows, cols, 1) )
+        axes[-1].set_title('_original_')  
+        plt.imshow(img.numpy().astype("int64"), alpha=1.0)
+        plt.axis('off')
+
+
+
+       
+        img = tf.cast(img, tf.float64)
+        img = (img - 127.5) / 127.5
+
+
+        image = tf.reshape(img, (-1, IMG_H, IMG_W, IMG_C))
+        reconstructed_images = g_model_inner.predict(image)
+        reconstructed_images = tf.reshape(reconstructed_images, (IMG_H, IMG_W, IMG_C))
+        reconstructed_images = reconstructed_images * 127 + 127
+
+        name_subplot = mode+'_reconstructed_'+i
+        axes.append( fig.add_subplot(rows, cols, 3) )
+        axes[-1].set_title('_reconstructed_') 
+        plt.imshow(reconstructed_images.numpy().astype("int64"), alpha=1.0)
+        plt.axis('off')
+
+        fig.tight_layout()    
+        fig.savefig(mode+'_'+i+'.png')
+        plt.show()
+        plt.clf()
 
 
 # In[ ]:
@@ -312,29 +375,29 @@ class Dataset:
 import urllib3
 
 urllib3.disable_warnings()  # Disable SSL warnings that may happen during download.
-train_dataset = Dataset("data/numbers/train_data", training=True)
-test_dataset = Dataset("data/numbers/test_data", training=False)
+train_dataset = Dataset(train_data_path, training=True)
+test_dataset = Dataset(test_data_path, training=False)
 
 
 # In[ ]:
 
 
-_, axarr = plt.subplots(nrows=2, ncols=5, figsize=(20, 20))
+# _, axarr = plt.subplots(nrows=2, ncols=5, figsize=(20, 20))
 
-sample_keys = list(test_dataset.data.keys())
-# print(sample_keys)
-for a in range(2):
-    for b in range(5):
-        temp_image = test_dataset.data[sample_keys[a]][b]
-        temp_image = np.stack((temp_image[:, :, 0],) * 3, axis=2)
-        temp_image *= 255
-        temp_image = np.clip(temp_image, 0, 255).astype("uint8")
-        if b == 2:
-            axarr[a, b].set_title("Class : " + sample_keys[a])
-        axarr[a, b].imshow(temp_image)
-        axarr[a, b].xaxis.set_visible(False)
-        axarr[a, b].yaxis.set_visible(False)
-plt.show()
+# sample_keys = list(test_dataset.data.keys())
+# # print(sample_keys)
+# for a in range(2):
+#     for b in range(5):
+#         temp_image = test_dataset.data[sample_keys[a]][b]
+#         temp_image = np.stack((temp_image[:, :, 0],) * 3, axis=2)
+#         temp_image *= 255
+#         temp_image = np.clip(temp_image, 0, 255).astype("uint8")
+#         if b == 2:
+#             axarr[a, b].set_title("Class : " + sample_keys[a])
+#         axarr[a, b].imshow(temp_image)
+#         axarr[a, b].xaxis.set_visible(False)
+#         axarr[a, b].yaxis.set_visible(False)
+# plt.show()
 
 
 # In[ ]:
@@ -440,7 +503,7 @@ def build_multiresunet(input_shape):
     d4 = decoder_block(d3, s1, f[0])
 
     """ Output """
-    outputs = tf.keras.layers.Conv2D(3, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
 
     """ Model """
     model = tf.keras.models.Model(inputs, outputs, name="MultiResUNET")
@@ -521,7 +584,7 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 ADV_REG_RATE_LF = 1
-REC_REG_RATE_LF = 50
+REC_REG_RATE_LF = 10
 SSIM_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
@@ -536,172 +599,178 @@ auc_list = []
 # In[ ]:
 
 
-for meta_iter in range(meta_iters):
-    frac_done = meta_iter / meta_iters
-    cur_meta_step_size = (1 - frac_done) * meta_step_size
-    # Temporarily save the weights from the model.
-    d_old_vars = d_model.get_weights()
-    g_old_vars = g_model.get_weights()
-    # Get a sample from the full dataset.
-    mini_dataset = train_dataset.get_mini_dataset(
-        inner_batch_size, inner_iters, train_shots, classes
-    )
-    gen_loss_out = 0.0
-    disc_loss_out = 0.0
-    for images, labels in mini_dataset:
-        
-        with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
-            # tf.print("Images: ", images)
-            reconstructed_images = g_model(images, training=True)
-            feature_real, label_real = d_model(images, training=True)
-            # print(generated_images.shape)
-            feature_fake, label_fake = d_model(reconstructed_images, training=True)
-
-            # Loss 1: ADVERSARIAL loss
-            # use wessertein loss
-            loss_gen_w = generator_wassertein_loss(label_fake)
-
-            loss_disc_w = discriminator_wassertein_loss(label_real, label_fake) + gradient_penalty(d_model, inner_batch_size, images, reconstructed_images) * GP_LF
-            
-#             gen_adv_loss = cross_entropy(fake_output, tf.ones_like(fake_output))
-            
-            # Loss 2: RECONSTRUCTION loss (L1)
-            loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
-        
-            # Loss 3: SSIM Loss
-            loss_ssim =  ssim(images, reconstructed_images)
-        
-            # Loss 4: FEATURE Loss
-#             loss_feat = tf.reduce_mean(mse(real_output, fake_output))
-            loss_feat = feat(feature_real, feature_fake)
-
-            gen_loss = tf.reduce_mean( (loss_gen_w * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
-            disc_loss = tf.reduce_mean( (loss_disc_w * ADV_REG_RATE_LF) + (loss_feat *FEAT_REG_RATE_LF) )
-#             disc_loss = adv_loss
-        
-        gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
-        gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
-        
-        gen_loss_out = gen_loss
-        disc_loss_out = disc_loss
-        
-        d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
-        g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
-        
-    
-    
-     
-    d_new_vars = d_model.get_weights()
-    g_new_vars = g_model.get_weights()
-    
-    # Perform SGD for the meta step.
-    for var in range(len(d_new_vars)):
-        d_new_vars[var] = d_old_vars[var] + (
-            (d_new_vars[var] - d_old_vars[var]) * cur_meta_step_size
+if TRAIN:
+    print("Start Trainning. ", name_model)
+    for meta_iter in range(meta_iters):
+        frac_done = meta_iter / meta_iters
+        cur_meta_step_size = (1 - frac_done) * meta_step_size
+        # Temporarily save the weights from the model.
+        d_old_vars = d_model.get_weights()
+        g_old_vars = g_model.get_weights()
+        # Get a sample from the full dataset.
+        mini_dataset = train_dataset.get_mini_dataset(
+            inner_batch_size, inner_iters, train_shots, classes
         )
-    
-    
-    
-    for var in range(len(g_new_vars)):
-        g_new_vars[var] = g_old_vars[var] + (
-            (g_new_vars[var] - g_old_vars[var]) * cur_meta_step_size
-        )
-    
-    
-    
-    # After the meta-learning step, reload the newly-trained weights into the model.
-    g_model.set_weights(g_new_vars)
-    d_model.set_weights(d_new_vars)
-    # Evaluation loop
-    
-    if meta_iter % eval_interval == 0:
-        
-        if meta_iter % 100 == 0:
-            
-            iter_list = np.append(iter_list, meta_iter)
-            gen_loss_list = np.append(gen_loss_list, gen_loss_out)
-            disc_loss_list = np.append(disc_loss_list, disc_loss_out)
-            
-            # range between 0-1
-            anomaly_weight = 0.1
+        gen_loss_out = 0.0
+        disc_loss_out = 0.0
+        for images, labels in mini_dataset:
 
-            scores_ano = []
-            real_label = []
-
-            
-            i = 0
-            test_ds = test_dataset.get_dataset(1)
-
-            d_old_vars = d_model.get_weights()
-            g_old_vars = g_model.get_weights()
-
-            for images, labels in test_ds:
-                # print(i)
-                i += 1
-            
-                reconstructed_images = g_model(images, training=False)
-                feature_real, label_real  = d_model(images, training=False)
+            with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+                # tf.print("Images: ", images)
+                reconstructed_images = g_model(images, training=True)
+                feature_real, label_real = d_model(images, training=True)
                 # print(generated_images.shape)
-                feature_fake, label_fake = d_model(reconstructed_images, training=False)
+                feature_fake, label_fake = d_model(reconstructed_images, training=True)
 
+                # Loss 1: ADVERSARIAL loss
+                # use wessertein loss
+                loss_gen_w = generator_wassertein_loss(label_fake)
+                
+                # loss_disc_w = discriminator_wassertein_loss(label_real, label_fake)
+                
+                loss_disc_w = discriminator_wassertein_loss(label_real, label_fake) + gradient_penalty(d_model, inner_batch_size, images, reconstructed_images) * GP_LF
+
+    #             gen_adv_loss = cross_entropy(fake_output, tf.ones_like(fake_output))
 
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
 
-                loss_feat = feat(feature_real, feature_fake)
-
                 # Loss 3: SSIM Loss
                 loss_ssim =  ssim(images, reconstructed_images)
 
-                score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
+                # Loss 4: FEATURE Loss
+    #             loss_feat = tf.reduce_mean(mse(real_output, fake_output))
+                loss_feat = feat(feature_real, feature_fake)
 
-                scores_ano = np.append(scores_ano, score.numpy())
-                real_label = np.append(real_label, labels.numpy()[0])
-        
-            ''' Scale scores vector between [0, 1]'''
-            scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
+                gen_loss = tf.reduce_mean( (loss_gen_w * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
+                disc_loss = tf.reduce_mean( (loss_disc_w * ADV_REG_RATE_LF) + (loss_feat *FEAT_REG_RATE_LF) )
+    #             disc_loss = adv_loss
 
-            auc_out, _ = roc(real_label, scores_ano, name_model)
-            auc_list = np.append(auc_list, auc_out)
+            gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
+            gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
+
+            gen_loss_out = gen_loss
+            disc_loss_out = disc_loss
+
+            d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
+            g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
 
 
 
-#             scores_ano = (scores_ano > threshold).astype(int)
-#             # print("real label: ", real_label)
-#             # print("anomaly score: ", scores_ano)
-#             cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
-            
-#             # TP = cm[1][1]
-#             # FP = cm[0][1]
-#             # FN = cm[1][0]
-#             # TN = cm[0][0]
-           
 
-#             diagonal_sum = cm.trace()
-#             sum_of_all_elements = cm.sum()
+        d_new_vars = d_model.get_weights()
+        g_new_vars = g_model.get_weights()
 
-            # print("Accuracy: ", diagonal_sum / sum_of_all_elements )
-    #         print("False Alarm Rate: ", FP/(FP+TP))
-    #         print("Leakage Rate: ", FN/(FN+TN))
-    #         print("precision_score: ",precision_score(real_label, scores_ano))
-    # #         print("recall_score: ", recall_score(real_label, scores_ano))
-    #         print("recall_score: ", TP/(TP+FN))
-    # #         F1 = 2 * (precision * recall) / (precision + recall)
-    #         print("F1-Score: ", f1_score(real_label, scores_ano))
-            
-            print(
-                "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
+        # Perform SGD for the meta step.
+        for var in range(len(d_new_vars)):
+            d_new_vars[var] = d_old_vars[var] + (
+                (d_new_vars[var] - d_old_vars[var]) * cur_meta_step_size
             )
-            
-            # save model's weights
-            g_model.save(g_model_path)
-            d_model.save(d_model_path)
+
+
+
+        for var in range(len(g_new_vars)):
+            g_new_vars[var] = g_old_vars[var] + (
+                (g_new_vars[var] - g_old_vars[var]) * cur_meta_step_size
+            )
+
+
+
+        # After the meta-learning step, reload the newly-trained weights into the model.
+        g_model.set_weights(g_new_vars)
+        d_model.set_weights(d_new_vars)
+        # Evaluation loop
+
+        if meta_iter % eval_interval == 0:
+
+            if meta_iter % 100 == 0:
+
+                iter_list = np.append(iter_list, meta_iter)
+                gen_loss_list = np.append(gen_loss_list, gen_loss_out)
+                disc_loss_list = np.append(disc_loss_list, disc_loss_out)
+
+                # range between 0-1
+                anomaly_weight = 0.1
+
+                scores_ano = []
+                real_label = []
+
+
+                i = 0
+                test_ds = test_dataset.get_dataset(1)
+
+                d_old_vars = d_model.get_weights()
+                g_old_vars = g_model.get_weights()
+
+                for images, labels in test_ds:
+                    # print(i)
+                    i += 1
+
+                    reconstructed_images = g_model(images, training=False)
+                    feature_real, label_real  = d_model(images, training=False)
+                    # print(generated_images.shape)
+                    feature_fake, label_fake = d_model(reconstructed_images, training=False)
+
+
+                    # Loss 2: RECONSTRUCTION loss (L1)
+                    loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
+
+                    loss_feat = feat(feature_real, feature_fake)
+
+                    # Loss 3: SSIM Loss
+                    loss_ssim =  ssim(images, reconstructed_images)
+
+                    score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
+
+                    scores_ano = np.append(scores_ano, score.numpy())
+                    real_label = np.append(real_label, labels.numpy()[0])
+
+                ''' Scale scores vector between [0, 1]'''
+                scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
+
+                auc_out, _ = roc(real_label, scores_ano, name_model)
+                auc_list = np.append(auc_list, auc_out)
+
+
+
+    #             scores_ano = (scores_ano > threshold).astype(int)
+    #             # print("real label: ", real_label)
+    #             # print("anomaly score: ", scores_ano)
+    #             cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
+
+    #             # TP = cm[1][1]
+    #             # FP = cm[0][1]
+    #             # FN = cm[1][0]
+    #             # TN = cm[0][0]
+
+
+    #             diagonal_sum = cm.trace()
+    #             sum_of_all_elements = cm.sum()
+
+                # print("Accuracy: ", diagonal_sum / sum_of_all_elements )
+        #         print("False Alarm Rate: ", FP/(FP+TP))
+        #         print("Leakage Rate: ", FN/(FN+TN))
+        #         print("precision_score: ",precision_score(real_label, scores_ano))
+        # #         print("recall_score: ", recall_score(real_label, scores_ano))
+        #         print("recall_score: ", TP/(TP+FN))
+        # #         F1 = 2 * (precision * recall) / (precision + recall)
+        #         print("F1-Score: ", f1_score(real_label, scores_ano))
+
+                print(
+                    "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
+                )
+
+                # save model's weights
+                g_model.save(g_model_path)
+                d_model.save(d_model_path)
+    
+    plot_epoch_result(iter_list, gen_loss_list, "Generator_Loss", name_model, "g")
+    plot_epoch_result(iter_list, disc_loss_list, "Discriminator_Loss", name_model, "r")
+    plot_epoch_result(iter_list, auc_list, "AUC", name_model, "b")
 
 
 # In[ ]:
 
 
-plot_epoch_result(iter_list, gen_loss_list, "Generator_Loss", name_model, "g")
-plot_epoch_result(iter_list, disc_loss_list, "Discriminator_Loss", name_model, "r")
-plot_epoch_result(iter_list, auc_list, "AUC", name_model, "b")
+checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
 
