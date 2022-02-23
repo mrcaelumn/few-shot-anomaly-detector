@@ -53,11 +53,11 @@ classes = 1
 
 dataset_name = "numbers"
 
+mode_colour = str(IMG_H) + "_rgb"
 if IMG_C == 1:
-    dataset_name = dataset_name + "_gray"
-else:
-    dataset_name = dataset_name + "_rgb"
-name_model = str(IMG_H)+"_"+dataset_name+"_few_shot_anomaly_detection"+"_"+str(meta_iters)
+    mode_colour = str(IMG_H) + "_gray"
+    
+name_model = mode_colour+"_"+dataset_name+"_few_shot_anomaly_detection"+"_"+str(meta_iters)
 g_model_path = "saved_model/"+name_model+"_g_model.h5"
 d_model_path = "saved_model/"+name_model+"_d_model.h5"
 
