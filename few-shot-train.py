@@ -42,7 +42,7 @@ meta_step_size = 0.25
 inner_batch_size = 25
 eval_batch_size = 25
 
-meta_iters = 2000
+meta_iters = 3000
 eval_iters = 1
 inner_iters = 10
 
@@ -52,6 +52,11 @@ shots = 10
 classes = 1
 
 dataset_name = "numbers"
+
+if IMG_C == 1:
+    dataset_name = dataset_name + "_gray"
+else:
+    dataset_name = dataset_name + "_rgb"
 name_model = str(IMG_H)+"_"+dataset_name+"_few_shot_anomaly_detection"+"_"+str(meta_iters)
 g_model_path = "saved_model/"+name_model+"_g_model.h5"
 d_model_path = "saved_model/"+name_model+"_d_model.h5"
