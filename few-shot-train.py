@@ -51,13 +51,14 @@ train_shots = 25
 shots = 10
 classes = 1
 
-name_model = "prototype_few_shot_anomaly_detection"
-g_model_path = "saved_model/g_"+name_model+"_"+str(meta_iters)+".h5"
-d_model_path = "saved_model/d_"+name_model+"_"+str(meta_iters)+".h5"
+dataset_name = "numbers"
+name_model = str(IMG_H)+"_"+dataset_name+"_few_shot_anomaly_detection"+"_"+str(meta_iters)
+g_model_path = "saved_model/"+name_model+"_g_model.h5"
+d_model_path = "saved_model/"+name_model+"_d_model.h5"
 
 
-train_data_path = "data/numbers/train_data"
-test_data_path = "data/numbers/test_data"
+train_data_path = "data/"+dataset_name+"/train_data"
+test_data_path = "data/"+dataset_name+"/test_data"
 
 
 # In[ ]:
@@ -240,8 +241,10 @@ def extraction(image, label):
     img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img)
     img = tf.cast(img, tf.float32)
-    #     rescailing image from 0,255 to -1,1
-    img = (img - 127.5) / 127.5
+    # normalize to the range -1,1
+    # img = (img - 127.5) / 127.5
+    # normalize to the range 0-1
+    img /= 255.0
 
     return img, label
 
@@ -250,11 +253,9 @@ def extraction(image, label):
 
 
 def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath, test_data_path):
+    print("Start Checking Reconstructed Image")
     g_model_inner.load_weights(g_filepath)
     d_model_inner.load_weights(d_filepath)
-#         path = "mura_data/RGB/test_data/normal/normal.bmp"
-#         path = "mura_data/RGB/test_data/defect/defect.bmp"
-#         path = "rgb_serius_defect/BUTTERFLY (2).bmp"
     paths = {
         "normal": test_data_path+"/normal/normal.png",
         "defect": test_data_path+"/defect/defect.png",
@@ -273,7 +274,7 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
 
         img = tf.io.read_file(v)
         img = tf.io.decode_png(img, channels=IMG_C)
-
+        img = prep_stage(img)
         name_subplot = mode+'_original_'+i
         axes.append( fig.add_subplot(rows, cols, 1) )
         axes[-1].set_title('_original_')  
@@ -290,8 +291,6 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         image = tf.reshape(img, (-1, IMG_H, IMG_W, IMG_C))
         reconstructed_images = self.generator.predict(image)
         reconstructed_images = tf.reshape(reconstructed_images, (IMG_H, IMG_W, IMG_C))
-#             reconstructed_images = reconstructed_images[0, :, :, 0] * 127.5 + 127.5
-#             reconstructed_images = reconstructed_images[0]
         reconstructed_images = reconstructed_images * 127 + 127
 
         name_subplot = mode+'_reconstructed_'+i
@@ -392,22 +391,22 @@ test_dataset = Dataset(test_data_path, training=False)
 # In[ ]:
 
 
-_, axarr = plt.subplots(nrows=2, ncols=5, figsize=(20, 20))
+# _, axarr = plt.subplots(nrows=2, ncols=5, figsize=(20, 20))
 
-sample_keys = list(test_dataset.data.keys())
-# print(sample_keys)
-for a in range(2):
-    for b in range(5):
-        temp_image = test_dataset.data[sample_keys[a]][b]
-        temp_image = np.stack((temp_image[:, :, 0],) * 3, axis=2)
-        temp_image *= 255
-        temp_image = np.clip(temp_image, 0, 255).astype("uint8")
-        if b == 2:
-            axarr[a, b].set_title("Class : " + sample_keys[a])
-        axarr[a, b].imshow(temp_image)
-        axarr[a, b].xaxis.set_visible(False)
-        axarr[a, b].yaxis.set_visible(False)
-plt.show()
+# sample_keys = list(test_dataset.data.keys())
+# # print(sample_keys)
+# for a in range(2):
+#     for b in range(5):
+#         temp_image = test_dataset.data[sample_keys[a]][b]
+#         temp_image = np.stack((temp_image[:, :, 0],) * 3, axis=2)
+#         temp_image *= 255
+#         temp_image = np.clip(temp_image, 0, 255).astype("uint8")
+#         if b == 2:
+#             axarr[a, b].set_title("Class : " + sample_keys[a])
+#         axarr[a, b].imshow(temp_image)
+#         axarr[a, b].xaxis.set_visible(False)
+#         axarr[a, b].yaxis.set_visible(False)
+# plt.show()
 
 
 # In[ ]:
@@ -461,7 +460,7 @@ def build_generator_resnet50_unet(input_shape):
     d4 = decoder_block(d3, s1, x)                      ## (256 x 256)
     
     """ Output """
-    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="softmax")(d4)
     # outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d4)
 
     model = tf.keras.models.Model(inputs, outputs)
@@ -486,8 +485,8 @@ def build_discriminator(inputs):
     feature = x
     
     x = tf.keras.layers.Flatten()(x)
-    output = tf.keras.layers.Dense(1, activation="tanh")(x)
-    # output = tf.keras.layers.Dense(1)(x)
+    # output = tf.keras.layers.Dense(1, activation="tanh")(x)
+    output = tf.keras.layers.Dense(1)(x)
     
     model = tf.keras.models.Model(inputs, outputs = [feature, output])
     
