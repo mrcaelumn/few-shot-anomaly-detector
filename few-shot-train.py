@@ -481,7 +481,7 @@ def build_discriminator(inputs):
     f = [2**i for i in range(4)]
     x = inputs
     for i in range(0, 4):
-        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size= (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
+        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
         x = tf.keras.layers.BatchNormalization()(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
@@ -510,8 +510,8 @@ def gradient_penalty(discriminator, batch_size, real_images, fake_images):
     """
     # Get the interpolated image
     alpha = tf.random.normal([batch_size, 1, 1, IMG_C], 0.0, 1.0)
-    diff = fake_images - real_images
-    interpolated = real_images + alpha * diff
+    diff = tf.math.subtract(fake_images, real_images)
+    interpolated = tf.math.add(real_images, tf.math.multiply(alpha, diff))
 
     with tf.GradientTape() as gp_tape:
         gp_tape.watch(interpolated)
