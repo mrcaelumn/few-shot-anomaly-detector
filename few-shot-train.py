@@ -9,12 +9,17 @@ import logging, os
 logging.disable(logging.WARNING)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
-import numpy as np
-import random
+
+
 import tensorflow as tf
 import tensorflow_datasets as tfds
+import tensorflow_io as tfio
+import tensorflow_addons as tfa
+
 import os
 from tqdm import tqdm
+import numpy as np
+import random
 
 from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score
 from sklearn.utils import shuffle
@@ -236,6 +241,15 @@ def read_data_with_labels(filepath, class_names):
     return image_list, label_list
 
 def prep_stage(x):
+    
+    x = tf.cast(x, tf.float32) / 255.0
+    x = tfio.experimental.color.rgb_to_bgr(x)
+    x = tf.image.adjust_contrast(x, 11.)
+    x = tf.image.adjust_hue(x, 11.)
+    x = tf.image.adjust_gamma(x)
+    x = tfa.image.median_filter2d(x)
+    x = tf.cast(x * 255.0, tf.uint8)
+    
     x = tf.image.resize(x, (IMG_H, IMG_W))
     return x
 
@@ -245,6 +259,20 @@ def extraction(image, label):
     img = tf.io.read_file(image)
     img = tf.io.decode_png(img, channels=IMG_C)
     img = prep_stage(img)
+    img = tf.cast(img, tf.float32)
+    # normalize to the range -1,1
+    img = (img - 127.5) / 127.5
+    # normalize to the range 0-1
+    # img /= 255.0
+
+    return img, label
+
+def extraction_test(image, label):
+    # This function will shrink the Omniglot images to the desired size,
+    # scale pixel values and convert the RGB image to grayscale
+    img = tf.io.read_file(image)
+    img = tf.io.decode_png(img, channels=IMG_C)
+    img = tf.image.resize(img, (IMG_H, IMG_W))
     img = tf.cast(img, tf.float32)
     # normalize to the range -1,1
     img = (img - 127.5) / 127.5
@@ -328,8 +356,9 @@ class Dataset:
         #     print("length: ", len(filenames))
         ds = tf.data.Dataset.from_tensor_slices((filenames, labels))
         self.ds = ds.shuffle(buffer_size=10240)
-
-
+        
+        
+        
         for image, label in ds.map(extraction):
             image = image.numpy()
             label = str(label.numpy())
@@ -337,6 +366,7 @@ class Dataset:
                 self.data[label] = []
             self.data[label].append(image)
         self.labels = list(self.data.keys())
+            
 
     def get_mini_dataset(
         self, batch_size, repetitions, shots, num_classes, split=False
@@ -381,7 +411,7 @@ class Dataset:
         return dataset
     
     def get_dataset(self, batch_size):
-        ds = self.ds.map(extraction, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        ds = self.ds.map(extraction_test, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         ds = ds.batch(batch_size)
         ds = ds.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         return ds
@@ -397,7 +427,6 @@ test_dataset = Dataset(test_data_path, training=False)
 
 
 # _, axarr = plt.subplots(nrows=2, ncols=5, figsize=(20, 20))
-
 # sample_keys = list(test_dataset.data.keys())
 # # print(sample_keys)
 # for a in range(2):
@@ -734,5 +763,5 @@ if TRAIN:
 # In[ ]:
 
 
-checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
+# checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
 
