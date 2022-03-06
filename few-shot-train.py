@@ -267,20 +267,6 @@ def extraction(image, label):
 
     return img, label
 
-def extraction_test(image, label):
-    # This function will shrink the Omniglot images to the desired size,
-    # scale pixel values and convert the RGB image to grayscale
-    img = tf.io.read_file(image)
-    img = tf.io.decode_png(img, channels=IMG_C)
-    img = tf.image.resize(img, (IMG_H, IMG_W))
-    img = tf.cast(img, tf.float32)
-    # normalize to the range -1,1
-    img = (img - 127.5) / 127.5
-    # normalize to the range 0-1
-    # img /= 255.0
-
-    return img, label
-
 
 # In[ ]:
 
@@ -411,7 +397,7 @@ class Dataset:
         return dataset
     
     def get_dataset(self, batch_size):
-        ds = self.ds.map(extraction_test, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        ds = self.ds.map(extraction, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         ds = ds.batch(batch_size)
         ds = ds.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         return ds
@@ -420,7 +406,10 @@ import urllib3
 
 urllib3.disable_warnings()  # Disable SSL warnings that may happen during download.
 train_dataset = Dataset(train_data_path, training=True)
+
+
 test_dataset = Dataset(test_data_path, training=False)
+test_ds = test_dataset.get_dataset(1)
 
 
 # In[ ]:
@@ -603,6 +592,8 @@ if TRAIN:
         )
         gen_loss_out = 0.0
         disc_loss_out = 0.0
+        epsilon=0.000001
+        
         for images, labels in mini_dataset:
 
             with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
@@ -612,13 +603,21 @@ if TRAIN:
                 # print(generated_images.shape)
                 feature_fake, label_fake = d_model(reconstructed_images, training=True)
 
-
-                # use wessertein loss
-                loss_gen_w = generator_wassertein_loss(label_fake)
-
-                # loss_disc_w = discriminator_wassertein_loss(label_real, label_fake)
                 
-                loss_disc_w = discriminator_wassertein_loss(label_real, label_fake) + gradient_penalty(d_model, inner_batch_size, images, reconstructed_images) * GP_LF
+                discriminator_fake_average_out = tf.math.reduce_mean(label_fake, axis=0)
+                discriminator_real_average_out = tf.math.reduce_mean(label_real, axis=0)
+                real_fake_ra_out = label_real - discriminator_fake_average_out
+                fake_real_ra_out = label_fake - discriminator_real_average_out
+                
+                # use relativistic average loss
+                loss_gen_ra = -(tf.math.reduce_mean(tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon),axis=0)+tf.math.reduce_mean(tf.math.log(1-tf.math.sigmoid(real_fake_ra_out)+epsilon),axis=0))
+                
+                loss_disc_ra = -(tf.math.reduce_mean(tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon ),axis=0)+tf.math.reduce_mean(tf.math.log(1-tf.math.sigmoid(real_fake_ra_out)+epsilon),axis=0))
+                
+                # use wessertein loss
+                # loss_gen_w = generator_wassertein_loss(label_fake)
+                # loss_disc_w = discriminator_wassertein_loss(label_real, label_fake)
+                # loss_disc_w = discriminator_wassertein_loss(label_real, label_fake) + gradient_penalty(d_model, inner_batch_size, images, reconstructed_images) * GP_LF
 
 
                 # Loss 2: RECONSTRUCTION loss (L1)
@@ -631,8 +630,8 @@ if TRAIN:
     #             loss_feat = tf.reduce_mean(mse(real_output, fake_output))
                 loss_feat = feat(feature_real, feature_fake)
 
-                gen_loss = tf.reduce_mean( (loss_gen_w * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
-                disc_loss = tf.reduce_mean( (loss_disc_w * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
+                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
+                disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
     #             disc_loss = adv_loss
 
             gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
@@ -684,9 +683,8 @@ if TRAIN:
                 scores_ano = []
                 real_label = []
 
-
                 i = 0
-                test_ds = test_dataset.get_dataset(1)
+                
 
                 d_old_vars = d_model.get_weights()
                 g_old_vars = g_model.get_weights()
