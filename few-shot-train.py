@@ -52,7 +52,7 @@ eval_iters = 1
 inner_iters = 10
 
 eval_interval = 1
-train_shots = 20
+train_shots = 40
 shots = 10
 classes = 1
 
@@ -623,13 +623,13 @@ if TRAIN:
                 loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
 
                 # Loss 3: SSIM Loss
-                # loss_ssim =  ssim(images, reconstructed_images)
+                loss_ssim =  ssim(images, reconstructed_images)
 
                 # Loss 4: FEATURE Loss
                 loss_feat = feat(feature_real, feature_fake)
                 
                 # Loss 5: cosine similarity  Loss
-                loss_consim = cosine_loss(images, reconstructed_images)
+                # loss_consim = cosine_loss(images, reconstructed_images)
 
                 gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF)                                           + (loss_ssim * SSIM_REG_RATE_LF)                                           + (loss_feat * FEAT_REG_RATE_LF) )
                 
