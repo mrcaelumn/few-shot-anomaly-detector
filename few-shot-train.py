@@ -566,9 +566,9 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
-# SSIM_REG_RATE_LF = 10
-CONSIM_REG_RATE_LF = 10
-FEAT_REG_RATE_LF = 1
+SSIM_REG_RATE_LF = 50
+# CONSIM_REG_RATE_LF = 10
+FEAT_REG_RATE_LF = 10
 
 GP_LF = 10
 
@@ -631,8 +631,7 @@ if TRAIN:
                 # Loss 5: cosine similarity  Loss
                 loss_consim = cosine_loss(images, reconstructed_images)
 
-                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF)                                           # + (loss_ssim * SSIM_REG_RATE_LF) 
-                                          + (loss_feat * FEAT_REG_RATE_LF) + (loss_consim * CONSIM_REG_RATE_LF))
+                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF)                                           + (loss_ssim * SSIM_REG_RATE_LF)                                           + (loss_feat * FEAT_REG_RATE_LF) )
                 
                 disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
     #             disc_loss = adv_loss
