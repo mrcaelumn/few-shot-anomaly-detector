@@ -165,10 +165,12 @@ def roc(labels, scores, name_model):
 mae = tf.keras.losses.MeanAbsoluteError()
 # L2 Loss
 mse = tf.keras.losses.MeanSquaredError() 
+# Feature Loss
 feat = FeatureLoss()
-
 # SSIM loss
 ssim = SSIMLoss()
+# CosSim Loss
+cosine_loss = tf.keras.losses.CosineSimilarity(axis=1)
 
 
 # In[ ]:
@@ -565,6 +567,7 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 10
 SSIM_REG_RATE_LF = 10
+CONSIM_REG_RATE_LF = 1
 FEAT_REG_RATE_LF = 1
 
 GP_LF = 10
@@ -609,16 +612,12 @@ if TRAIN:
                 real_fake_ra_out = label_real - discriminator_fake_average_out
                 fake_real_ra_out = label_fake - discriminator_real_average_out
                 
+                # Loss 1: 
                 # use relativistic average loss
                 loss_gen_ra = -(tf.math.reduce_mean(tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon),axis=0)+tf.math.reduce_mean(tf.math.log(1-tf.math.sigmoid(real_fake_ra_out)+epsilon),axis=0))
                 
                 loss_disc_ra = -(tf.math.reduce_mean(tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon ),axis=0)+tf.math.reduce_mean(tf.math.log(1-tf.math.sigmoid(real_fake_ra_out)+epsilon),axis=0))
                 
-                # use wessertein loss
-                # loss_gen_w = generator_wassertein_loss(label_fake)
-                # loss_disc_w = discriminator_wassertein_loss(label_real, label_fake)
-                # loss_disc_w = discriminator_wassertein_loss(label_real, label_fake) + gradient_penalty(d_model, inner_batch_size, images, reconstructed_images) * GP_LF
-
 
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
@@ -627,10 +626,13 @@ if TRAIN:
                 loss_ssim =  ssim(images, reconstructed_images)
 
                 # Loss 4: FEATURE Loss
-    #             loss_feat = tf.reduce_mean(mse(real_output, fake_output))
                 loss_feat = feat(feature_real, feature_fake)
+                
+                # Loss 5: cosine similarity  Loss
+                loss_consim = cosine_loss(images, reconstructed_images)
 
-                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
+                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF)                                           + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF)                                           + (loss_consim * CONSIM_REG_RATE_LF)
+                                         )
                 disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
     #             disc_loss = adv_loss
 
