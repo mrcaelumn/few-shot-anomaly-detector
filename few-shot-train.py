@@ -52,7 +52,7 @@ eval_iters = 1
 inner_iters = 10
 
 eval_interval = 1
-train_shots = 40
+train_shots = 20
 shots = 10
 classes = 1
 
@@ -565,8 +565,8 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 ADV_REG_RATE_LF = 1
-REC_REG_RATE_LF = 10
-SSIM_REG_RATE_LF = 10
+REC_REG_RATE_LF = 1
+# SSIM_REG_RATE_LF = 10
 CONSIM_REG_RATE_LF = 1
 FEAT_REG_RATE_LF = 1
 
@@ -623,7 +623,7 @@ if TRAIN:
                 loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
 
                 # Loss 3: SSIM Loss
-                loss_ssim =  ssim(images, reconstructed_images)
+                # loss_ssim =  ssim(images, reconstructed_images)
 
                 # Loss 4: FEATURE Loss
                 loss_feat = feat(feature_real, feature_fake)
@@ -631,8 +631,9 @@ if TRAIN:
                 # Loss 5: cosine similarity  Loss
                 loss_consim = cosine_loss(images, reconstructed_images)
 
-                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF)                                           + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF)                                           + (loss_consim * CONSIM_REG_RATE_LF)
-                                         )
+                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF)                                           # + (loss_ssim * SSIM_REG_RATE_LF) 
+                                          + (loss_feat * FEAT_REG_RATE_LF) + (loss_consim * CONSIM_REG_RATE_LF))
+                
                 disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
     #             disc_loss = adv_loss
 
