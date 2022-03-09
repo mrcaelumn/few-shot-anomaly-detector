@@ -565,9 +565,9 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 ADV_REG_RATE_LF = 1
-REC_REG_RATE_LF = 50
+REC_REG_RATE_LF = 10
 SSIM_REG_RATE_LF = 10
-FEAT_REG_RATE_LF = 10
+FEAT_REG_RATE_LF = 1
 
 
 gen_loss_list = []
