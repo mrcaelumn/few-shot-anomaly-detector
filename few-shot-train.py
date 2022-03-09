@@ -594,7 +594,7 @@ if TRAIN:
         
         gen_loss_out = 0.0
         disc_loss_out = 0.0
-        
+        epsilon = 0.000001
         
         for images, labels in mini_dataset:
 
