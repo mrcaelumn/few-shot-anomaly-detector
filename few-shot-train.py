@@ -244,13 +244,13 @@ def read_data_with_labels(filepath, class_names):
 
 def prep_stage(x):
     
-    x = tf.cast(x, tf.float32) / 255.0
-    x = tfio.experimental.color.rgb_to_bgr(x)
-    x = tf.image.adjust_contrast(x, 11.)
-    x = tf.image.adjust_hue(x, 11.)
-    x = tf.image.adjust_gamma(x)
-    x = tfa.image.median_filter2d(x)
-    x = tf.cast(x * 255.0, tf.uint8)
+    # x = tf.cast(x, tf.float32) / 255.0
+    # x = tfio.experimental.color.rgb_to_bgr(x)
+    # x = tf.image.adjust_contrast(x, 11.)
+    # x = tf.image.adjust_hue(x, 11.)
+    # x = tf.image.adjust_gamma(x)
+    # x = tfa.image.median_filter2d(x)
+    # x = tf.cast(x * 255.0, tf.uint8)
     
     x = tf.image.resize(x, (IMG_H, IMG_W))
     return x
