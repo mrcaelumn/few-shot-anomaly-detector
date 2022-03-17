@@ -41,7 +41,7 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 TRAIN = True
 
-learning_rate = 0.001
+learning_rate = 0.002
 meta_step_size = 0.25
 
 inner_batch_size = 25
