@@ -119,17 +119,26 @@ class AdversarialLoss(tf.keras.losses.Loss):
         # Loss 4: FEATURE Loss
         return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_in, labels=labels_in))
 
-# function for Generator Wassertein loss function
+# class for Gradient Magnitude similarity loss function
+class GMSLoss(tf.keras.losses.Loss):
+    def __init__(self,
+             reduction=tf.keras.losses.Reduction.AUTO,
+             name='GMSLoss'):
+        super().__init__(reduction=reduction, name=name)
 
-def generator_wassertein_loss(fake_img):
-    fake = tf.convert_to_tensor(fake_img)
-    return -tf.reduce_mean(fake)
-
-# function for Discriminator Wassertein loss function
-def discriminator_wassertein_loss(real_img, fake_img):
-    fake = tf.convert_to_tensor(fake_img)
-    real = tf.cast(real_img, fake.dtype)
-    return tf.reduce_mean(fake) - tf.reduce_mean(real)
+    
+    def call(self, ori, recon):
+        c=0.0026
+        recon = tf.convert_to_tensor(recon)
+        ori = tf.cast(ori, recon.dtype)
+        x = tf.reduce_mean(ori, keepdims=True)
+        y = tf.reduce_mean(recon, keepdims=True)
+        # tfa.image.median_filter2d
+        g_I = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(x, padding="CONSTANT"))
+        g_Ir = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(y, padding="CONSTANT"))
+        g_map = (2 * g_I * g_Ir + c) / (g_I**2 + g_Ir**2 + c)
+        
+        return tf.reduce_mean(1-g_map)
 
 
 # In[ ]:
@@ -169,8 +178,8 @@ mse = tf.keras.losses.MeanSquaredError()
 feat = FeatureLoss()
 # SSIM loss
 ssim = SSIMLoss()
-# CosSim Loss
-cosine_loss = tf.keras.losses.CosineSimilarity(axis=1)
+# GMS loss
+gms = GMSLoss()
 
 
 # In[ ]:
@@ -440,16 +449,18 @@ test_ds = test_dataset.get_dataset(1)
 def conv_block(input, num_filters):
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.LeakyReLU(0.2)(x)
+    # x = tf.keras.layers.LeakyReLU(0.2)(x)
+    x = tf.keras.layers.ReLU()(x)
 
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.LeakyReLU(0.2)(x)
+    # x = tf.keras.layers.LeakyReLU(0.2)(x)
+    x = tf.keras.layers.ReLU()(x)
 
     return x
 
 def decoder_block(input, skip_features, num_filters):
-    x = tf.keras.layers.Conv2DTranspose(num_filters, (3, 3), strides=2, padding="same")(input)
+    x = tf.keras.layers.Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(input)
     x = tf.keras.layers.Concatenate()([x, skip_features])
     x = conv_block(x, num_filters)
     return x
@@ -501,7 +512,7 @@ def build_discriminator(inputs):
     f = [2**i for i in range(4)]
     x = inputs
     for i in range(0, 4):
-        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
+        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (1, 1), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
         x = tf.keras.layers.BatchNormalization()(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
@@ -517,33 +528,6 @@ def build_discriminator(inputs):
     
     return model
     # return x
-
-
-# In[ ]:
-
-
-def gradient_penalty(discriminator, batch_size, real_images, fake_images):
-    """ Calculates the gradient penalty.
-
-    This loss is calculated on an interpolated image
-    and added to the discriminator loss.
-    """
-    # Get the interpolated image
-    alpha = tf.random.normal([batch_size, 1, 1, IMG_C], 0.0, 1.0)
-    diff = tf.math.subtract(fake_images, real_images)
-    interpolated = tf.math.add(real_images, tf.math.multiply(alpha, diff))
-
-    with tf.GradientTape() as gp_tape:
-        gp_tape.watch(interpolated)
-        # 1. Get the discriminator output for this interpolated image.
-        pred = discriminator(interpolated, training=True)
-
-    # 2. Calculate the gradients w.r.t to this interpolated image.
-    grads = gp_tape.gradient(pred, [interpolated])[0]
-    # 3. Calculate the norm of the gradients.
-    norm = tf.sqrt(tf.reduce_sum(tf.square(grads), axis=[1, 2, 3]))
-    gp = tf.reduce_mean((norm - 1.0) ** 2)
-    return gp
 
 
 # In[ ]:
@@ -565,8 +549,9 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 ADV_REG_RATE_LF = 1
-REC_REG_RATE_LF = 10
+REC_REG_RATE_LF = 50
 SSIM_REG_RATE_LF = 10
+GMS_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
 
@@ -627,13 +612,12 @@ if TRAIN:
                 # Loss 4: FEATURE Loss
                 loss_feat = feat(feature_real, feature_fake)
                 
-                # Loss 5: cosine similarity  Loss
-                # loss_consim = cosine_loss(images, reconstructed_images)
+                # Loss 5: GMS loss
+                loss_gms = gms(images, reconstructed_images)
 
-                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
+                gen_loss = tf.reduce_mean( (loss_gen_ra * ADV_REG_RATE_LF) + (loss_rec * REC_REG_RATE_LF) + (loss_ssim * SSIM_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) + (loss_gms * GMS_REG_RATE_LF) )
                 
                 disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
-    #             disc_loss = adv_loss
 
             gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
             gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
@@ -668,6 +652,8 @@ if TRAIN:
         # After the meta-learning step, reload the newly-trained weights into the model.
         g_model.set_weights(g_new_vars)
         d_model.set_weights(d_new_vars)
+        
+        
         # Evaluation loop
 
         if meta_iter % eval_interval == 0:
@@ -704,9 +690,6 @@ if TRAIN:
 
                     loss_feat = feat(feature_real, feature_fake)
 
-                    # Loss 3: SSIM Loss
-                    loss_ssim =  ssim(images, reconstructed_images)
-
                     score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
 
                     scores_ano = np.append(scores_ano, score.numpy())
@@ -717,31 +700,6 @@ if TRAIN:
 
                 auc_out, _ = roc(real_label, scores_ano, name_model)
                 auc_list = np.append(auc_list, auc_out)
-
-
-
-    #             scores_ano = (scores_ano > threshold).astype(int)
-    #             # print("real label: ", real_label)
-    #             # print("anomaly score: ", scores_ano)
-    #             cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
-
-    #             # TP = cm[1][1]
-    #             # FP = cm[0][1]
-    #             # FN = cm[1][0]
-    #             # TN = cm[0][0]
-
-
-    #             diagonal_sum = cm.trace()
-    #             sum_of_all_elements = cm.sum()
-
-                # print("Accuracy: ", diagonal_sum / sum_of_all_elements )
-        #         print("False Alarm Rate: ", FP/(FP+TP))
-        #         print("Leakage Rate: ", FN/(FN+TN))
-        #         print("precision_score: ",precision_score(real_label, scores_ano))
-        # #         print("recall_score: ", recall_score(real_label, scores_ano))
-        #         print("recall_score: ", TP/(TP+FN))
-        # #         F1 = 2 * (precision * recall) / (precision + recall)
-        #         print("F1-Score: ", f1_score(real_label, scores_ano))
 
                 print(
                     "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
