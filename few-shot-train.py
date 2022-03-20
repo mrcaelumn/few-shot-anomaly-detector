@@ -252,17 +252,14 @@ def read_data_with_labels(filepath, class_names):
 
     return image_list, label_list
 
-def prep_stage(x):
+def prep_stage(x, train=True):
     
-    # x = tf.cast(x, tf.float32) / 255.0
-    # x = tfio.experimental.color.rgb_to_bgr(x)
-    # x = tf.image.adjust_contrast(x, 11.)
-    # x = tf.image.adjust_hue(x, 11.)
-    # x = tf.image.adjust_gamma(x)
-    # x = tfa.image.median_filter2d(x)
-    # x = tf.cast(x * 255.0, tf.uint8)
-    
-    x = tf.image.resize(x, (IMG_H, IMG_W))
+    if train:
+        x = tf.image.adjust_contrast(x, 0.25)
+        x = tf.image.resize(x, (IMG_H, IMG_W))
+    else: 
+        x = tf.image.resize(x, (IMG_H, IMG_W))
+        
     return x
 
 def extraction(image, label):
@@ -270,7 +267,21 @@ def extraction(image, label):
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
     img = tf.io.decode_png(img, channels=IMG_C)
-    img = prep_stage(img)
+    img = prep_stage(img, True)
+    img = tf.cast(img, tf.float32)
+    # normalize to the range -1,1
+    img = (img - 127.5) / 127.5
+    # normalize to the range 0-1
+    # img /= 255.0
+
+    return img, label
+
+def extraction_test(image, label):
+    # This function will shrink the Omniglot images to the desired size,
+    # scale pixel values and convert the RGB image to grayscale
+    img = tf.io.read_file(image)
+    img = tf.io.decode_png(img, channels=IMG_C)
+    img = prep_stage(img, False)
     img = tf.cast(img, tf.float32)
     # normalize to the range -1,1
     img = (img - 127.5) / 127.5
@@ -409,7 +420,7 @@ class Dataset:
         return dataset
     
     def get_dataset(self, batch_size):
-        ds = self.ds.map(extraction, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        ds = self.ds.map(extraction_test, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         ds = ds.batch(batch_size)
         ds = ds.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         return ds
