@@ -57,6 +57,7 @@ shots = 10
 classes = 1
 
 dataset_name = "numbers"
+test_dataset_name = "numbers"
 
 mode_colour = str(IMG_H) + "_rgb"
 if IMG_C == 1:
@@ -68,7 +69,7 @@ d_model_path = "saved_model/"+name_model+"_d_model.h5"
 
 
 train_data_path = "data/"+dataset_name+"/train_data"
-test_data_path = "data/"+dataset_name+"/test_data"
+test_data_path = "data/"+test_dataset_name+"/test_data"
 
 
 # In[ ]:
