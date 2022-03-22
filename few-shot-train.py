@@ -41,6 +41,8 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 TRAIN = True
 
+LIMIT_TEST_IMAGES = 100
+
 learning_rate = 0.002
 meta_step_size = 0.25
 
@@ -49,7 +51,7 @@ eval_batch_size = 25
 
 meta_iters = 2000
 eval_iters = 1
-inner_iters = 10
+inner_iters = 4
 
 eval_interval = 1
 train_shots = 40
@@ -57,6 +59,7 @@ shots = 40
 classes = 1
 
 dataset_name = "numbers"
+eval_dataset_name = "numbers"
 test_dataset_name = "numbers"
 
 mode_colour = str(IMG_H) + "_rgb"
@@ -69,6 +72,7 @@ d_model_path = "saved_model/"+name_model+"_d_model.h5"
 
 
 train_data_path = "data/"+dataset_name+"/train_data"
+eval_data_path = "data/"+eval_dataset_name+"/eval_data"
 test_data_path = "data/"+test_dataset_name+"/test_data"
 
 
@@ -236,20 +240,29 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
 
 
 def read_data_with_labels(filepath, class_names):
-
+   
     image_list = []
     label_list = []
     for class_n in class_names:  # do dogs and cats
         path = os.path.join(filepath,class_n)  # create path to dogs and cats
         class_num = class_names.index(class_n)  # get the classification  (0 or a 1). 0=dog 1=cat
+        path_list = []
+        class_list = []
         for img in tqdm(os.listdir(path)):  
             if ".DS_Store" != img:
                 filpath = os.path.join(path,img)
 #                 print(filpath, class_num)
-
-                image_list.append(filpath)
-                label_list.append(class_num)
-
+                
+                path_list.append(filpath)
+                class_list.append(class_num)
+                # image_label_list.append({filpath:class_num})
+        
+        path_list, class_list = shuffle(path_list, class_list, random_state=random.randint(123, 10000))
+        image_list = image_list + path_list[:LIMIT_TEST_IMAGES]
+        label_list = label_list + class_list[:LIMIT_TEST_IMAGES]
+  
+    # print(image_list, label_list)
+    
     return image_list, label_list
 
 def prep_stage(x, train=True):
@@ -350,6 +363,78 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
 # In[ ]:
 
 
+def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
+    g_model_inner.load_weights(g_filepath)
+    d_model_inner.load_weights(d_filepath)
+    
+    anomaly_weight = 0.1
+        
+    scores_ano = []
+    real_label = []
+    rec_loss_list = []
+    feat_loss_list = []
+    ssim_loss_list = []
+    
+    for images, labels in test_ds:
+                    # print(i)
+        i += 1
+
+        reconstructed_images = g_model(images, training=False)
+        feature_real, label_real  = d_model(images, training=False)
+        # print(generated_images.shape)
+        feature_fake, label_fake = d_model(reconstructed_images, training=False)
+
+        # Loss 2: RECONSTRUCTION loss (L1)
+        loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
+
+        loss_feat = feat(feature_real, feature_fake)
+
+        score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
+
+        scores_ano = np.append(scores_ano, score.numpy())
+        real_label = np.append(real_label, labels.numpy()[0])
+        
+        rec_loss_list = np.append(rec_loss_list, loss_rec)
+        feat_loss_list = np.append(feat_loss_list, loss_feat)
+        
+    ''' Scale scores vector between [0, 1]'''
+    scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
+    
+    auc_out, threshold = roc(real_label, scores_ano, name_model)
+    print("auc: ", auc_out)
+    print("threshold: ", threshold)
+
+
+
+    scores_ano = (scores_ano > threshold).astype(int)
+    cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
+    TP = cm[1][1]
+    FP = cm[0][1]
+    FN = cm[1][0]
+    TN = cm[0][0]
+    print(cm)
+    print(
+            "model saved. TP %d:, FP=%d, FN=%d, TN=%d" % (TP, FP, FN, TN)
+    )
+    plot_confusion_matrix(cm, class_names, title=name_model)
+
+    diagonal_sum = cm.trace()
+    sum_of_all_elements = cm.sum()
+
+    print("Accuracy: ", diagonal_sum / sum_of_all_elements )
+    print("False Alarm Rate (FPR): ", FP/(FP+TN))
+    print("Leakage Rat (FNR): ", FN/(FN+TP))
+    print("TNR: ", TN/(FP+TN))
+    print("precision_score: ", TP/(TP+FP))
+    print("recall_score (manual): ", TP/(TP+FN))
+    print("NPV: ", TN/(FN+TN))
+#         F1 = 2 * (precision * recall) / (precision + recall)
+    print("F1-Score: ", f1_score(real_label, scores_ano))
+
+
+# In[ ]:
+
+
 class Dataset:
     # This class will facilitate the creation of a few-shot dataset
     # from the Omniglot dataset that can be sampled from quickly while also
@@ -427,12 +512,13 @@ class Dataset:
 
 import urllib3
 
-urllib3.disable_warnings()  # Disable SSL warnings that may happen during download.
+urllib3.disable_warnings() # Disable SSL warnings that may happen during download.
+
+## load dataset
 train_dataset = Dataset(train_data_path, training=True)
 
-
-test_dataset = Dataset(test_data_path, training=False)
-test_ds = test_dataset.get_dataset(1)
+eval_dataset = Dataset(eval_data_path, training=False)
+eval_ds = eval_dataset.get_dataset(1)
 
 
 # In[ ]:
@@ -694,7 +780,7 @@ if TRAIN:
                 d_old_vars = d_model.get_weights()
                 g_old_vars = g_model.get_weights()
 
-                for images, labels in test_ds:
+                for images, labels in eval_ds:
                     # print(i)
                     i += 1
 
@@ -739,4 +825,12 @@ if TRAIN:
 
 
 # checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
+
+
+# In[ ]:
+
+
+test_dataset = Dataset(test_data_path, training=False)
+
+testing(g_model, d_model, g_model_path, d_model_path, test_dataset.get_dataset(1))
 
