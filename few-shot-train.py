@@ -49,7 +49,7 @@ meta_step_size = 0.25
 inner_batch_size = 25
 eval_batch_size = 25
 
-meta_iters = 2000
+meta_iters = 2100
 eval_iters = 1
 inner_iters = 1
 
@@ -379,8 +379,6 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     ssim_loss_list = []
     
     for images, labels in test_ds:
-                    # print(i)
-        i += 1
 
         reconstructed_images = g_model(images, training=False)
         feature_real, label_real  = d_model(images, training=False)
@@ -429,9 +427,8 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     print("Leakage Rat (FNR): ", FN/(FN+TP))
     print("TNR: ", TN/(FP+TN))
     print("precision_score: ", TP/(TP+FP))
-    print("recall_score (manual): ", TP/(TP+FN))
+    print("recall_score: ", TP/(TP+FN))
     print("NPV: ", TN/(FN+TN))
-#         F1 = 2 * (precision * recall) / (precision + recall)
     print("F1-Score: ", f1_score(real_label, scores_ano))
 
 
