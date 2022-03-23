@@ -683,6 +683,77 @@ auc_list = []
 # In[ ]:
 
 
+@tf.function
+def train_step(real_images):
+    with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+        # tf.print("Images: ", images)
+        reconstructed_images = g_model(images, training=True)
+        feature_real, label_real = d_model(images, training=True)
+        # print(generated_images.shape)
+        feature_fake, label_fake = d_model(reconstructed_images, training=True)
+
+
+        discriminator_fake_average_out = tf.math.reduce_mean(label_fake, axis=0)
+        discriminator_real_average_out = tf.math.reduce_mean(label_real, axis=0)
+        real_fake_ra_out = label_real - discriminator_fake_average_out
+        fake_real_ra_out = label_fake - discriminator_real_average_out
+
+        # Loss 1: 
+        # use relativistic average loss
+        loss_gen_ra = -( 
+            tf.math.reduce_mean( 
+                tf.math.log( 
+                    tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+            ) + tf.math.reduce_mean( 
+                tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+            ) 
+        )
+
+        loss_disc_ra = -( 
+            tf.math.reduce_mean( 
+                tf.math.log(
+                    tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+            ) + tf.math.reduce_mean( 
+                tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+            ) 
+        )
+
+        # Loss 2: RECONSTRUCTION loss (L1)
+        loss_rec = mae(images, reconstructed_images)
+
+        # Loss 3: SSIM Loss
+        # loss_ssim =  ssim(images, reconstructed_images)
+
+        # Loss 4: FEATURE Loss
+        loss_feat = feat(feature_real, feature_fake)
+
+        # Loss 5: GMS loss
+        loss_gms = gms(images, reconstructed_images)
+
+        # Loss 6: MSGMS loss
+        # loss_msgms = msgms(images, reconstructed_images)
+
+        gen_loss = tf.reduce_mean( 
+            (loss_gen_ra * ADV_REG_RATE_LF) 
+            + (loss_rec * REC_REG_RATE_LF) 
+            + (loss_feat * FEAT_REG_RATE_LF) 
+            + (loss_gms * GMS_REG_RATE_LF) 
+        )
+
+        disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
+
+    gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
+    gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
+
+    d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
+    g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
+    
+    return gen_loss, disc_loss
+
+
+# In[ ]:
+
+
 if TRAIN:
     print("Start Trainning. ", name_model)
     for meta_iter in range(meta_iters):
@@ -700,74 +771,11 @@ if TRAIN:
         disc_loss_out = 0.0
         epsilon = 0.000001
         
-        for images, labels in mini_dataset:
-
-            with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
-                # tf.print("Images: ", images)
-                reconstructed_images = g_model(images, training=True)
-                feature_real, label_real = d_model(images, training=True)
-                # print(generated_images.shape)
-                feature_fake, label_fake = d_model(reconstructed_images, training=True)
-
-                
-                discriminator_fake_average_out = tf.math.reduce_mean(label_fake, axis=0)
-                discriminator_real_average_out = tf.math.reduce_mean(label_real, axis=0)
-                real_fake_ra_out = label_real - discriminator_fake_average_out
-                fake_real_ra_out = label_fake - discriminator_real_average_out
-                
-                # Loss 1: 
-                # use relativistic average loss
-                loss_gen_ra = -( 
-                    tf.math.reduce_mean( 
-                        tf.math.log( 
-                            tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
-                    ) + tf.math.reduce_mean( 
-                        tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
-                    ) 
-                )
-                
-                loss_disc_ra = -( 
-                    tf.math.reduce_mean( 
-                        tf.math.log(
-                            tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
-                    ) + tf.math.reduce_mean( 
-                        tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
-                    ) 
-                )
-                
-                # Loss 2: RECONSTRUCTION loss (L1)
-                loss_rec = mae(images, reconstructed_images)
-
-                # Loss 3: SSIM Loss
-                # loss_ssim =  ssim(images, reconstructed_images)
-
-                # Loss 4: FEATURE Loss
-                loss_feat = feat(feature_real, feature_fake)
-                
-                # Loss 5: GMS loss
-                loss_gms = gms(images, reconstructed_images)
-                
-                # Loss 6: MSGMS loss
-                # loss_msgms = msgms(images, reconstructed_images)
-
-                gen_loss = tf.reduce_mean( 
-                    (loss_gen_ra * ADV_REG_RATE_LF) 
-                    + (loss_rec * REC_REG_RATE_LF) 
-                    + (loss_feat * FEAT_REG_RATE_LF) 
-                    + (loss_gms * GMS_REG_RATE_LF) 
-                )
-                
-                disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
-
-            gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
-            gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
-
-            gen_loss_out = gen_loss
-            disc_loss_out = disc_loss
-
-            d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
-            g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
-
+        for images, _ in mini_dataset:
+            g_loss, d_loss = train_step(images)
+            gen_loss_out = g_loss
+            disc_loss_out = d_loss
+            
         d_new_vars = d_model.get_weights()
         g_new_vars = g_model.get_weights()
 
