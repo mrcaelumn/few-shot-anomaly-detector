@@ -43,7 +43,7 @@ TRAIN = True
 
 LIMIT_TEST_IMAGES = 100
 
-learning_rate = 0.002
+learning_rate = 0.003
 meta_step_size = 0.25
 
 inner_batch_size = 25
@@ -51,11 +51,10 @@ eval_batch_size = 25
 
 meta_iters = 2100
 eval_iters = 1
-inner_iters = 1
+inner_iters = 4
 
-eval_interval = 1
 train_shots = 10
-shots = 40
+shots = 10
 classes = 1
 
 dataset_name = "numbers"
@@ -649,7 +648,7 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
 # SSIM_REG_RATE_LF = 10
-GMS_REG_RATE_LF = 10
+GMS_REG_RATE_LF = 50
 FEAT_REG_RATE_LF = 1
 
 
@@ -760,58 +759,57 @@ if TRAIN:
         
         # Evaluation loop
 
-        if meta_iter % eval_interval == 0:
 
-            if meta_iter % 100 == 0:
+        if meta_iter % 100 == 0:
 
-                iter_list = np.append(iter_list, meta_iter)
-                gen_loss_list = np.append(gen_loss_list, gen_loss_out)
-                disc_loss_list = np.append(disc_loss_list, disc_loss_out)
+            iter_list = np.append(iter_list, meta_iter)
+            gen_loss_list = np.append(gen_loss_list, gen_loss_out)
+            disc_loss_list = np.append(disc_loss_list, disc_loss_out)
 
-                # range between 0-1
-                anomaly_weight = 0.1
+            # range between 0-1
+            anomaly_weight = 0.1
 
-                scores_ano = []
-                real_label = []
+            scores_ano = []
+            real_label = []
 
-                i = 0
-                
+            i = 0
 
-                d_old_vars = d_model.get_weights()
-                g_old_vars = g_model.get_weights()
 
-                for images, labels in eval_ds:
-                    # print(i)
-                    i += 1
+            d_old_vars = d_model.get_weights()
+            g_old_vars = g_model.get_weights()
 
-                    reconstructed_images = g_model(images, training=False)
-                    feature_real, label_real  = d_model(images, training=False)
-                    # print(generated_images.shape)
-                    feature_fake, label_fake = d_model(reconstructed_images, training=False)
+            for images, labels in eval_ds:
+                # print(i)
+                i += 1
 
-                    # Loss 2: RECONSTRUCTION loss (L1)
-                    loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
+                reconstructed_images = g_model(images, training=False)
+                feature_real, label_real  = d_model(images, training=False)
+                # print(generated_images.shape)
+                feature_fake, label_fake = d_model(reconstructed_images, training=False)
 
-                    loss_feat = feat(feature_real, feature_fake)
+                # Loss 2: RECONSTRUCTION loss (L1)
+                loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
 
-                    score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
+                loss_feat = feat(feature_real, feature_fake)
 
-                    scores_ano = np.append(scores_ano, score.numpy())
-                    real_label = np.append(real_label, labels.numpy()[0])
+                score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
 
-                ''' Scale scores vector between [0, 1]'''
-                scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
+                scores_ano = np.append(scores_ano, score.numpy())
+                real_label = np.append(real_label, labels.numpy()[0])
 
-                auc_out, _ = roc(real_label, scores_ano, name_model)
-                auc_list = np.append(auc_list, auc_out)
+            ''' Scale scores vector between [0, 1]'''
+            scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
 
-                print(
-                    "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
-                )
+            auc_out, _ = roc(real_label, scores_ano, name_model)
+            auc_list = np.append(auc_list, auc_out)
 
-                # save model's weights
-                g_model.save(g_model_path)
-                d_model.save(d_model_path)
+            print(
+                "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
+            )
+
+            # save model's weights
+            g_model.save(g_model_path)
+            d_model.save(d_model_path)
     
     """
     Train Ends
