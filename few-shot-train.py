@@ -51,10 +51,10 @@ eval_batch_size = 25
 
 meta_iters = 2000
 eval_iters = 1
-inner_iters = 4
+inner_iters = 1
 
 eval_interval = 1
-train_shots = 40
+train_shots = 10
 shots = 40
 classes = 1
 
@@ -136,14 +136,17 @@ class GMSLoss(tf.keras.losses.Loss):
         c=0.0026
         recon = tf.convert_to_tensor(recon)
         ori = tf.cast(ori, recon.dtype)
-        x = tf.reduce_mean(ori, keepdims=True)
-        y = tf.reduce_mean(recon, keepdims=True)
+        
         # tfa.image.median_filter2d
-        g_I = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(x, padding="CONSTANT"))
-        g_Ir = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(y, padding="CONSTANT"))
+        x = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(ori, padding="CONSTANT"))
+        y = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(recon, padding="CONSTANT"))
+        
+        g_I = tf.reduce_mean(ori, axis=1, keepdims=True)
+        g_Ir = tf.reduce_mean(recon, axis=1, keepdims=True)
+        
         g_map = (2 * g_I * g_Ir + c) / (g_I**2 + g_Ir**2 + c)
         
-        return tf.reduce_mean(1-g_map)
+        return tf.reduce_mean(1 - g_map)
 
 
 # In[ ]:
