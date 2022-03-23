@@ -799,6 +799,9 @@ if TRAIN:
 
             scores_ano = []
             real_label = []
+            
+            d_old_vars = d_model.get_weights()
+            g_old_vars = g_model.get_weights()
 
             for images, labels in eval_ds:
 
