@@ -51,7 +51,7 @@ eval_batch_size = 25
 
 meta_iters = 2100
 eval_iters = 1
-inner_iters = 4
+inner_iters = 1
 
 train_shots = 40
 shots = 10
@@ -136,16 +136,36 @@ class GMSLoss(tf.keras.losses.Loss):
         recon = tf.convert_to_tensor(recon)
         ori = tf.cast(ori, recon.dtype)
         
+        x = tf.reduce_mean(ori, axis=-1, keepdims=True)
+        y = tf.reduce_mean(recon, axis=-1, keepdims=True)
         # tfa.image.median_filter2d
-        x = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(ori, padding="CONSTANT"))
-        y = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(recon, padding="CONSTANT"))
         
-        g_I = tf.reduce_mean(ori, axis=1, keepdims=True)
-        g_Ir = tf.reduce_mean(recon, axis=1, keepdims=True)
-        
+        g_I = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(ori, padding="REFLECT"))
+        g_Ir = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(recon, padding="REFLECT"))
+                
         g_map = (2 * g_I * g_Ir + c) / (g_I**2 + g_Ir**2 + c)
         
         return tf.reduce_mean(1 - g_map)
+    
+# class for MS Gradient Magnitude similarity loss function
+class MSGMSLoss(tf.keras.losses.Loss):
+    def __init__(self,
+             reduction=tf.keras.losses.Reduction.AUTO,
+             name='MSGMSLoss'):
+        super().__init__(reduction=reduction, name=name)
+        self.gms_Loss = GMSLoss()
+
+    
+    def call(self, ori, recon):
+        
+        total_loss = self.gms_Loss(ori, recon)
+        
+        for _ in range(3):
+            ori = tf.nn.avg_pool2d(ori, ksize=2, strides=2, padding='SAME')
+            recon = tf.nn.avg_pool2d(recon, ksize=2, strides=2, padding='SAME')
+            total_loss += self.gms_Loss(ori, recon)
+
+        return total_loss / 4
 
 
 # In[ ]:
@@ -173,10 +193,6 @@ def roc(labels, scores, name_model):
 
 # delcare all loss function that we will use
 
-# for adversarial loss
-# cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
-# cross_entropy = AdversarialLoss()
-
 # L1 Loss
 mae = tf.keras.losses.MeanAbsoluteError()
 # L2 Loss
@@ -187,6 +203,8 @@ feat = FeatureLoss()
 ssim = SSIMLoss()
 # GMS loss
 gms = GMSLoss()
+# MSGMS loss
+msgms = MSGMSLoss()
 
 
 # In[ ]:
@@ -609,7 +627,7 @@ def build_discriminator(inputs):
     f = [2**i for i in range(4)]
     x = inputs
     for i in range(0, 4):
-        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (1, 1), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
+        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
         x = tf.keras.layers.BatchNormalization()(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
@@ -648,7 +666,7 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
 # SSIM_REG_RATE_LF = 10
-GMS_REG_RATE_LF = 50
+MSGMS_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
 
@@ -695,9 +713,23 @@ if TRAIN:
                 
                 # Loss 1: 
                 # use relativistic average loss
-                loss_gen_ra = -(tf.math.reduce_mean(tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon),axis=0)+tf.math.reduce_mean(tf.math.log(1-tf.math.sigmoid(real_fake_ra_out)+epsilon),axis=0))
+                loss_gen_ra = -(
+                    tf.math.reduce_mean(
+                        tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0
+                    ) 
+                    + tf.math.reduce_mean(
+                        tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0
+                    )
+                )
                 
-                loss_disc_ra = -(tf.math.reduce_mean(tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon ),axis=0)+tf.math.reduce_mean(tf.math.log(1-tf.math.sigmoid(real_fake_ra_out)+epsilon),axis=0))
+                loss_disc_ra = -(
+                    tf.math.reduce_mean(
+                        tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0
+                    )
+                    + tf.math.reduce_mean(
+                        tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0
+                    )
+                )
                 
 
                 # Loss 2: RECONSTRUCTION loss (L1)
@@ -709,15 +741,15 @@ if TRAIN:
                 # Loss 4: FEATURE Loss
                 loss_feat = feat(feature_real, feature_fake)
                 
-                # Loss 5: GMS loss
-                loss_gms = gms(images, reconstructed_images)
+                # Loss 5: MSGMS loss
+                loss_msgms = msgms(images, reconstructed_images)
 
                 gen_loss = tf.reduce_mean( 
                                         (loss_gen_ra * ADV_REG_RATE_LF) 
                                           + (loss_rec * REC_REG_RATE_LF) 
                                           # + (loss_ssim * SSIM_REG_RATE_LF) 
                                           + (loss_feat * FEAT_REG_RATE_LF) 
-                                          + (loss_gms * GMS_REG_RATE_LF) 
+                                          + (loss_msgms * MSGMS_REG_RATE_LF) 
                                          )
                 
                 disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
@@ -731,9 +763,6 @@ if TRAIN:
             d_optimizer.apply_gradients(zip(gradients_of_discriminator, d_model.trainable_variables))
             g_optimizer.apply_gradients(zip(gradients_of_generator, g_model.trainable_variables))
 
-
-
-
         d_new_vars = d_model.get_weights()
         g_new_vars = g_model.get_weights()
 
@@ -742,8 +771,6 @@ if TRAIN:
             d_new_vars[var] = d_old_vars[var] + (
                 (d_new_vars[var] - d_old_vars[var]) * cur_meta_step_size
             )
-
-
 
         for var in range(len(g_new_vars)):
             g_new_vars[var] = g_old_vars[var] + (
@@ -758,8 +785,6 @@ if TRAIN:
         
         
         # Evaluation loop
-
-
         if meta_iter % 100 == 0:
 
             iter_list = np.append(iter_list, meta_iter)
@@ -772,15 +797,7 @@ if TRAIN:
             scores_ano = []
             real_label = []
 
-            i = 0
-
-
-            d_old_vars = d_model.get_weights()
-            g_old_vars = g_model.get_weights()
-
             for images, labels in eval_ds:
-                # print(i)
-                i += 1
 
                 reconstructed_images = g_model(images, training=False)
                 feature_real, label_real  = d_model(images, training=False)
