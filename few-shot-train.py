@@ -652,16 +652,13 @@ def build_discriminator(inputs):
 
 input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
-mirrored_strategy = tf.distribute.MirroredStrategy()
-
-with mirrored_strategy.scope():
-    inputs = tf.keras.layers.Input(input_shape, name="input_1")
-    d_model = build_discriminator(inputs)
-    g_model = build_generator_resnet50_unet(inputs)
-    d_model.compile()
-    g_model.compile()
-    g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-    d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+inputs = tf.keras.layers.Input(input_shape, name="input_1")
+d_model = build_discriminator(inputs)
+g_model = build_generator_resnet50_unet(inputs)
+d_model.compile()
+g_model.compile()
+g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
