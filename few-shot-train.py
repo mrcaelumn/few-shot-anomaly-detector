@@ -752,7 +752,10 @@ if TRAIN:
                                           + (loss_msgms * MSGMS_REG_RATE_LF) 
                                          )
                 
-                disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
+                disc_loss = tf.reduce_mean(
+                    (loss_disc_ra * ADV_REG_RATE_LF) 
+                    + (loss_feat * FEAT_REG_RATE_LF) 
+                )
 
             gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
             gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
@@ -816,7 +819,8 @@ if TRAIN:
 
             ''' Scale scores vector between [0, 1]'''
             scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
-
+            print("real_label:", real_label)
+            print("scores_ano:", scores_ano)
             auc_out, _ = roc(real_label, scores_ano, name_model)
             auc_list = np.append(auc_list, auc_out)
 
