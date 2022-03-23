@@ -53,7 +53,7 @@ meta_iters = 2100
 eval_iters = 1
 inner_iters = 4
 
-train_shots = 10
+train_shots = 40
 shots = 10
 classes = 1
 
