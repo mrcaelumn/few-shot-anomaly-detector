@@ -270,7 +270,7 @@ def read_data_with_labels(filepath, class_names):
 def prep_stage(x, train=True):
     
     if train:
-        x = tf.image.adjust_contrast(x, -4)
+        # x = tf.image.adjust_contrast(x, -4)
         x = tf.image.resize(x, (IMG_H, IMG_W))
     else: 
         x = tf.image.resize(x, (IMG_H, IMG_W))
@@ -546,12 +546,12 @@ eval_ds = eval_dataset.get_dataset(1)
 def conv_block(input, num_filters):
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
-    # x = tf.keras.layers.LeakyReLU(0.2)(x)
+    # x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.ReLU()(x)
 
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
-    # x = tf.keras.layers.LeakyReLU(0.2)(x)
+    # x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.ReLU()(x)
 
     return x
