@@ -31,6 +31,8 @@ import matplotlib.patches as mpatches
 # In[ ]:
 
 
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
 IMG_H = 128
 IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.
@@ -650,14 +652,16 @@ def build_discriminator(inputs):
 
 input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
+mirrored_strategy = tf.distribute.MirroredStrategy()
 inputs = tf.keras.layers.Input(input_shape, name="input_1")
-d_model = build_discriminator(inputs)
-g_model = build_generator_resnet50_unet(inputs)
-d_model.compile()
-g_model.compile()
-
-g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+with mirrored_strategy.scope():
+    
+    d_model = build_discriminator(inputs)
+    g_model = build_generator_resnet50_unet(inputs)
+    d_model.compile()
+    g_model.compile()
+    g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+    d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
@@ -783,7 +787,7 @@ if TRAIN:
         d_model.set_weights(d_new_vars)
         
         # Evaluation loop
-        if meta_iter % 100 == 0:
+        if meta_iter % 100 == 0 and meta_iter != 0:
 
             iter_list = np.append(iter_list, meta_iter)
             gen_loss_list = np.append(gen_loss_list, gen_loss_out)
