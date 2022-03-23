@@ -666,7 +666,7 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
 # SSIM_REG_RATE_LF = 10
-MSGMS_REG_RATE_LF = 10
+GMS_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
 
@@ -733,7 +733,7 @@ if TRAIN:
                 
 
                 # Loss 2: RECONSTRUCTION loss (L1)
-                loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
+                loss_rec = mae(images, reconstructed_images)
 
                 # Loss 3: SSIM Loss
                 # loss_ssim =  ssim(images, reconstructed_images)
@@ -742,14 +742,14 @@ if TRAIN:
                 loss_feat = feat(feature_real, feature_fake)
                 
                 # Loss 5: MSGMS loss
-                loss_msgms = msgms(images, reconstructed_images)
+                loss_gms = gms(images, reconstructed_images)
 
                 gen_loss = tf.reduce_mean( 
                                         (loss_gen_ra * ADV_REG_RATE_LF) 
                                           + (loss_rec * REC_REG_RATE_LF) 
                                           # + (loss_ssim * SSIM_REG_RATE_LF) 
                                           + (loss_feat * FEAT_REG_RATE_LF) 
-                                          + (loss_msgms * MSGMS_REG_RATE_LF) 
+                                          + (loss_gms * GMS_REG_RATE_LF) 
                                          )
                 
                 disc_loss = tf.reduce_mean(
@@ -808,7 +808,7 @@ if TRAIN:
                 feature_fake, label_fake = d_model(reconstructed_images, training=False)
 
                 # Loss 2: RECONSTRUCTION loss (L1)
-                loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
+                loss_rec = mae(images, reconstructed_images)
 
                 loss_feat = feat(feature_real, feature_fake)
 
