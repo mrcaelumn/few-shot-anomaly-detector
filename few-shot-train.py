@@ -546,13 +546,13 @@ eval_ds = eval_dataset.get_dataset(1)
 def conv_block(input, num_filters):
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
-    # x = tf.keras.layers.LeakyReLU()(x)
-    x = tf.keras.layers.ReLU()(x)
+    x = tf.keras.layers.LeakyReLU()(x)
+    # x = tf.keras.layers.ReLU()(x)
 
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
-    # x = tf.keras.layers.LeakyReLU()(x)
-    x = tf.keras.layers.ReLU()(x)
+    x = tf.keras.layers.LeakyReLU()(x)
+    # x = tf.keras.layers.ReLU()(x)
 
     return x
 
