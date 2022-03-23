@@ -51,7 +51,7 @@ eval_batch_size = 25
 
 meta_iters = 2100
 eval_iters = 1
-inner_iters = 1
+inner_iters = 2
 
 train_shots = 40
 shots = 10
@@ -136,13 +136,13 @@ class GMSLoss(tf.keras.losses.Loss):
         recon = tf.convert_to_tensor(recon)
         ori = tf.cast(ori, recon.dtype)
         
-        x = tf.reduce_mean(ori, axis=-1, keepdims=True)
-        y = tf.reduce_mean(recon, axis=-1, keepdims=True)
         # tfa.image.median_filter2d
+        x = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(ori, padding="REFLECT"))
+        y = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(recon, padding="REFLECT"))
         
-        g_I = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(ori, padding="REFLECT"))
-        g_Ir = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(recon, padding="REFLECT"))
-                
+        g_I = tf.reduce_mean(ori, axis=1, keepdims=True)
+        g_Ir = tf.reduce_mean(recon, axis=1, keepdims=True)
+        
         g_map = (2 * g_I * g_Ir + c) / (g_I**2 + g_Ir**2 + c)
         
         return tf.reduce_mean(1 - g_map)
@@ -713,25 +713,24 @@ if TRAIN:
                 
                 # Loss 1: 
                 # use relativistic average loss
-                loss_gen_ra = -(
-                    tf.math.reduce_mean(
-                        tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0
+                loss_gen_ra = -( 
+                    tf.math.reduce_mean( 
+                        tf.math.log( 
+                            tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+                    ) + tf.math.reduce_mean( 
+                        tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
                     ) 
-                    + tf.math.reduce_mean(
-                        tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0
-                    )
                 )
                 
-                loss_disc_ra = -(
-                    tf.math.reduce_mean(
-                        tf.math.log(tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0
-                    )
-                    + tf.math.reduce_mean(
-                        tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0
-                    )
+                loss_disc_ra = -( 
+                    tf.math.reduce_mean( 
+                        tf.math.log(
+                            tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+                    ) + tf.math.reduce_mean( 
+                        tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+                    ) 
                 )
                 
-
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = mae(images, reconstructed_images)
 
@@ -741,21 +740,20 @@ if TRAIN:
                 # Loss 4: FEATURE Loss
                 loss_feat = feat(feature_real, feature_fake)
                 
-                # Loss 5: MSGMS loss
+                # Loss 5: GMS loss
                 loss_gms = gms(images, reconstructed_images)
+                
+                # Loss 6: MSGMS loss
+                # loss_msgms = msgms(images, reconstructed_images)
 
                 gen_loss = tf.reduce_mean( 
-                                        (loss_gen_ra * ADV_REG_RATE_LF) 
-                                          + (loss_rec * REC_REG_RATE_LF) 
-                                          # + (loss_ssim * SSIM_REG_RATE_LF) 
-                                          + (loss_feat * FEAT_REG_RATE_LF) 
-                                          + (loss_gms * GMS_REG_RATE_LF) 
-                                         )
-                
-                disc_loss = tf.reduce_mean(
-                    (loss_disc_ra * ADV_REG_RATE_LF) 
+                    (loss_gen_ra * ADV_REG_RATE_LF) 
+                    + (loss_rec * REC_REG_RATE_LF) 
                     + (loss_feat * FEAT_REG_RATE_LF) 
+                    + (loss_gms * GMS_REG_RATE_LF) 
                 )
+                
+                disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
 
             gradients_of_discriminator = disc_tape.gradient(disc_loss, d_model.trainable_variables)
             gradients_of_generator = gen_tape.gradient(gen_loss, g_model.trainable_variables)
@@ -780,12 +778,9 @@ if TRAIN:
                 (g_new_vars[var] - g_old_vars[var]) * cur_meta_step_size
             )
 
-
-
         # After the meta-learning step, reload the newly-trained weights into the model.
         g_model.set_weights(g_new_vars)
         d_model.set_weights(d_new_vars)
-        
         
         # Evaluation loop
         if meta_iter % 100 == 0:
@@ -800,11 +795,8 @@ if TRAIN:
             scores_ano = []
             real_label = []
             
-            d_old_vars = d_model.get_weights()
-            g_old_vars = g_model.get_weights()
-
             for images, labels in eval_ds:
-
+                # print(images)
                 reconstructed_images = g_model(images, training=False)
                 feature_real, label_real  = d_model(images, training=False)
                 # print(generated_images.shape)
@@ -812,18 +804,23 @@ if TRAIN:
 
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = mae(images, reconstructed_images)
-
+                
                 loss_feat = feat(feature_real, feature_fake)
-
+                # print("loss_rec:", loss_rec, "loss_feat:", loss_feat)
                 score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
-
+                # print(
+                #     "loss_rec:", loss_rec, 
+                #     "loss_feat:", loss_feat, 
+                #     "score:", score
+                # )
                 scores_ano = np.append(scores_ano, score.numpy())
                 real_label = np.append(real_label, labels.numpy()[0])
-
+            
+            # print("scores_ano:", scores_ano)
             ''' Scale scores vector between [0, 1]'''
             scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
-            print("real_label:", real_label)
-            print("scores_ano:", scores_ano)
+            # print("real_label:", real_label)
+            # print("scores_ano:", scores_ano)
             auc_out, _ = roc(real_label, scores_ano, name_model)
             auc_list = np.append(auc_list, auc_out)
 
