@@ -616,11 +616,10 @@ def build_discriminator(inputs):
 
 input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
-inputs_gen = tf.keras.layers.Input(input_shape, name="input_1")
-inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
+inputs = tf.keras.layers.Input(input_shape, name="input_1")
 
-g_model = build_generator_resnet50_unet(inputs_gen)
-d_model = build_discriminator(inputs_disc)
+g_model = build_generator_resnet50_unet(inputs)
+d_model = build_discriminator(inputs)
 # grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
 d_model.compile()
 g_model.compile()
