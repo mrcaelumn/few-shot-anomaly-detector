@@ -31,7 +31,7 @@ IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.
 
 # Weight initializers for the Generator network
-WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
+# WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 AUTOTUNE = tf.data.AUTOTUNE
 
 TRAIN = True
@@ -593,7 +593,7 @@ def build_discriminator(inputs):
     f = [2**i for i in range(4)]
     x = inputs
     for i in range(0, 4):
-        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (12, 12), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
+        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (12, 12), strides=(2, 2), padding='same')(x)
         x = tf.keras.layers.BatchNormalization()(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
