@@ -808,7 +808,7 @@ if TRAIN:
         gen_loss_out = 0.0
         disc_loss_out = 0.0
         
-        print("meta_iter: ", meta_iter)
+        # print("meta_iter: ", meta_iter)
         for images, _ in mini_dataset:
             g_loss, d_loss = train_step(images)
             gen_loss_out = g_loss
