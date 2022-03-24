@@ -528,12 +528,12 @@ eval_ds = eval_dataset.get_dataset(1)
 
 
 def conv_block(input, num_filters):
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(7,7), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
     # x = tf.keras.layers.ReLU()(x)
 
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(x)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(7,7), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
     # x = tf.keras.layers.ReLU()(x)
@@ -541,7 +541,7 @@ def conv_block(input, num_filters):
     return x
 
 def decoder_block(input, skip_features, num_filters):
-    x = tf.keras.layers.Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(input)
+    x = tf.keras.layers.Conv2DTranspose(num_filters, (5, 5), strides=2, padding="same")(input)
     x = tf.keras.layers.Concatenate()([x, skip_features])
     x = conv_block(x, num_filters)
     return x
@@ -577,7 +577,7 @@ def build_generator_resnet50_unet(inputs):
     d4 = decoder_block(d3, s1, x)                      ## (256 x 256)
     
     """ Output """
-    outputs = tf.keras.layers.Conv2D(1, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
     # outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d4)
 
     model = tf.keras.models.Model(inputs, outputs)
@@ -593,7 +593,7 @@ def build_discriminator(inputs):
     f = [2**i for i in range(4)]
     x = inputs
     for i in range(0, 4):
-        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
+        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (7, 7), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
         x = tf.keras.layers.BatchNormalization()(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
@@ -614,22 +614,6 @@ def build_discriminator(inputs):
 # In[ ]:
 
 
-def autoencoder(inputs):
-
-    # Encoder
-    net = tf.keras.layers.Conv2D(IMG_H, 2, activation="relu")(inputs)
-    net = tf.keras.layers.MaxPool2D(2, 2, padding = 'same')(net)
-
-    # Decoder
-    net = tf.keras.layers.Resizing(IMG_H, IMG_W, interpolation="nearest")(net)
-    net = tf.keras.layers.Conv2D(1, 2, activation = None, name = 'outputOfAuto')(net)
-
-    return net
-
-
-# In[ ]:
-
-
 input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
 inputs_gen = tf.keras.layers.Input(input_shape, name="input_1")
@@ -637,7 +621,7 @@ inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
 
 g_model = build_generator_resnet50_unet(inputs_gen)
 d_model = build_discriminator(inputs_disc)
-grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
+# grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
 d_model.compile()
 g_model.compile()
 g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
@@ -665,13 +649,13 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     for images, labels in test_ds:
 
         reconstructed_images = g_model(images, training=False)
-        grayscale_image = tf.image.rgb_to_grayscale(images)
-        feature_real, label_real  = d_model(grayscale_image, training=False)
+        # grayscale_image = tf.imagergb_to_grayscale(images)
+        feature_real, label_real  = d_model(images, training=False)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=False)
 
         # Loss 2: RECONSTRUCTION loss (L1)
-        loss_rec = mae(grayscale_image, reconstructed_images)
+        loss_rec = mae(images, reconstructed_images)
 
         loss_feat = feat(feature_real, feature_fake)
 
@@ -745,9 +729,9 @@ def train_step(real_images):
         
         reconstructed_images = g_model(real_images, training=True)
         
-        grayscale_image = grayscale_converter(real_images)
+        # grayscale_image = grayscale_converter(real_images)
         
-        feature_real, label_real = d_model(grayscale_image, training=True)
+        feature_real, label_real = d_model(real_images, training=True)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=True)
 
@@ -778,10 +762,10 @@ def train_step(real_images):
         )
 
         # Loss 2: RECONSTRUCTION loss (L1)
-        loss_rec = mae(grayscale_image, reconstructed_images)
+        loss_rec = mae(real_images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        loss_ssim =  ssim(grayscale_image, reconstructed_images)
+        loss_ssim =  ssim(real_images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
         loss_feat = feat(feature_real, feature_fake)
@@ -870,13 +854,13 @@ if TRAIN:
             for images, labels in eval_ds:
                 # print(images)
                 reconstructed_images = eval_g_model(images, training=False)
-                grayscale_image = grayscale_converter(images)
-                feature_real, label_real  = eval_d_model(grayscale_image, training=False)
+                
+                feature_real, label_real  = eval_d_model(images, training=False)
                 # print(generated_images.shape)
                 feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
 
                 # Loss 2: RECONSTRUCTION loss (L1)
-                loss_rec = mae(grayscale_image, reconstructed_images)
+                loss_rec = mae(images, reconstructed_images)
                 
                 loss_feat = feat(feature_real, feature_fake)
                 # print("loss_rec:", loss_rec, "loss_feat:", loss_feat)
