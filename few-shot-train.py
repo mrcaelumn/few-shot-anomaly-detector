@@ -772,7 +772,7 @@ def train_step(real_images):
         loss_rec = mae(images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        # loss_ssim =  ssim(images, reconstructed_images)
+        loss_ssim =  ssim(images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
         loss_feat = feat(feature_real, feature_fake)
@@ -787,7 +787,7 @@ def train_step(real_images):
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
             + (loss_feat * FEAT_REG_RATE_LF) 
-            + (loss_gms * GMS_REG_RATE_LF) 
+            + (loss_ssim * GMS_REG_RATE_LF) 
         )
 
         disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
