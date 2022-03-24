@@ -724,22 +724,18 @@ def train_step(real_images):
     
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         # tf.print("Images: ", images)
-        
-        
         reconstructed_images = g_model(real_images, training=True)
-        
-        # grayscale_image = grayscale_converter(real_images)
         
         feature_real, label_real = d_model(real_images, training=True)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=True)
-
 
         discriminator_fake_average_out = tf.math.reduce_mean(label_fake, axis=0)
         discriminator_real_average_out = tf.math.reduce_mean(label_real, axis=0)
         real_fake_ra_out = label_real - discriminator_fake_average_out
         fake_real_ra_out = label_fake - discriminator_real_average_out
         epsilon = 0.000001
+        
         # Loss 1: 
         # use relativistic average loss
         loss_gen_ra = -( 
