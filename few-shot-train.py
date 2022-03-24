@@ -45,7 +45,7 @@ TRAIN = True
 
 LIMIT_TEST_IMAGES = 100
 
-learning_rate = 0.003
+learning_rate = 0.001
 meta_step_size = 0.25
 
 inner_batch_size = 25
@@ -55,7 +55,7 @@ meta_iters = 2100
 eval_iters = 1
 inner_iters = 2
 
-train_shots = 40
+train_shots = 20
 shots = 10
 classes = 1
 
@@ -241,6 +241,46 @@ def save_plot(examples, epoch, n):
     filename = f"samples/generated_plot_epoch-{epoch}.png"
     plt.savefig(filename)
     plt.close()
+
+
+# In[ ]:
+
+
+def plot_confusion_matrix(cm, classes,
+                        normalize=False,
+                        title='Confusion matrix',
+                        cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, cm[i, j],
+            horizontalalignment="center",
+            color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig(title+'_cm.png')
+    plt.show()
+    plt.clf()
 
 
 # In[ ]:
@@ -725,16 +765,16 @@ def train_step(real_images):
         loss_feat = feat(feature_real, feature_fake)
 
         # Loss 5: GMS loss
-        loss_gms = gms(images, reconstructed_images)
+        # loss_gms = gms(images, reconstructed_images)
 
         # Loss 6: MSGMS loss
-        # loss_msgms = msgms(images, reconstructed_images)
+        loss_msgms = msgms(images, reconstructed_images)
 
         gen_loss = tf.reduce_mean( 
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
             + (loss_feat * FEAT_REG_RATE_LF) 
-            + (loss_gms * GMS_REG_RATE_LF) 
+            + (loss_msgms * GMS_REG_RATE_LF) 
         )
 
         disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
@@ -793,7 +833,8 @@ if TRAIN:
         
         # Evaluation loop
         if meta_iter % 100 == 0 and meta_iter != 0:
-
+            eval_g_model = g_model
+            eval_d_model = d_model
             iter_list = np.append(iter_list, meta_iter)
             gen_loss_list = np.append(gen_loss_list, gen_loss_out)
             disc_loss_list = np.append(disc_loss_list, disc_loss_out)
@@ -806,10 +847,10 @@ if TRAIN:
             
             for images, labels in eval_ds:
                 # print(images)
-                reconstructed_images = g_model(images, training=False)
-                feature_real, label_real  = d_model(images, training=False)
+                reconstructed_images = eval_g_model(images, training=False)
+                feature_real, label_real  = eval_d_model(images, training=False)
                 # print(generated_images.shape)
-                feature_fake, label_fake = d_model(reconstructed_images, training=False)
+                feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
 
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = mae(images, reconstructed_images)
