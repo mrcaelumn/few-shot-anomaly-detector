@@ -45,7 +45,7 @@ TRAIN = True
 
 LIMIT_TEST_IMAGES = 100
 
-learning_rate = 0.001
+learning_rate = 0.002
 meta_step_size = 0.25
 
 inner_batch_size = 25
@@ -53,9 +53,9 @@ eval_batch_size = 25
 
 meta_iters = 2100
 eval_iters = 1
-inner_iters = 2
+inner_iters = 4
 
-train_shots = 20
+train_shots = 40
 shots = 10
 classes = 1
 
@@ -697,8 +697,11 @@ d_model = build_discriminator(inputs)
 g_model = build_generator_resnet50_unet(inputs)
 d_model.compile()
 g_model.compile()
-g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+
+# d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
@@ -765,16 +768,16 @@ def train_step(real_images):
         loss_feat = feat(feature_real, feature_fake)
 
         # Loss 5: GMS loss
-        # loss_gms = gms(images, reconstructed_images)
+        loss_gms = gms(images, reconstructed_images)
 
         # Loss 6: MSGMS loss
-        loss_msgms = msgms(images, reconstructed_images)
+        # loss_msgms = msgms(images, reconstructed_images)
 
         gen_loss = tf.reduce_mean( 
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
             + (loss_feat * FEAT_REG_RATE_LF) 
-            + (loss_msgms * GMS_REG_RATE_LF) 
+            + (loss_gms * GMS_REG_RATE_LF) 
         )
 
         disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
