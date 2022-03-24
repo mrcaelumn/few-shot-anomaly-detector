@@ -51,12 +51,12 @@ meta_step_size = 0.25
 inner_batch_size = 25
 eval_batch_size = 25
 
-meta_iters = 2100
+meta_iters = 2000
 eval_iters = 1
 inner_iters = 4
 
 train_shots = 40
-shots = 10
+shots = 20
 classes = 1
 
 dataset_name = "numbers"
@@ -440,7 +440,8 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     for images, labels in test_ds:
 
         reconstructed_images = g_model(images, training=False)
-        feature_real, label_real  = d_model(images, training=False)
+        grayscale_image = tf.image.rgb_to_grayscale(images)
+        feature_real, label_real  = d_model(grayscale_image, training=False)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=False)
 
@@ -627,11 +628,11 @@ def decoder_block(input, skip_features, num_filters):
 
 
 # create generator model based on resnet50 and unet network
-def build_generator_resnet50_unet(input_shape):
+def build_generator_resnet50_unet(inputs):
     # print(inputs)
     # print("pretained start")
     """ Pre-trained ResNet50 Model """
-    resnet50 = tf.keras.applications.ResNet50(include_top=False, weights="imagenet", input_tensor=input_shape)
+    resnet50 = tf.keras.applications.ResNet50(include_top=False, weights="imagenet", input_tensor=inputs)
 
     """ Encoder """
     s1 = resnet50.get_layer("input_1").output           ## (256 x 256)
@@ -653,7 +654,7 @@ def build_generator_resnet50_unet(input_shape):
     d4 = decoder_block(d3, s1, x)                      ## (256 x 256)
     
     """ Output """
-    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(1, 1, padding="same", activation="tanh")(d4)
     # outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d4)
 
     model = tf.keras.models.Model(inputs, outputs)
@@ -692,16 +693,19 @@ def build_discriminator(inputs):
 
 input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
-inputs = tf.keras.layers.Input(input_shape, name="input_1")
-d_model = build_discriminator(inputs)
-g_model = build_generator_resnet50_unet(inputs)
+inputs_gen = tf.keras.layers.Input(input_shape, name="input_1")
+inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
+
+g_model = build_generator_resnet50_unet(inputs_gen)
+d_model = build_discriminator(inputs_disc)
+
 d_model.compile()
 g_model.compile()
-# g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
-# d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
@@ -725,10 +729,16 @@ auc_list = []
 
 @tf.function
 def train_step(real_images):
+    
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         # tf.print("Images: ", images)
-        reconstructed_images = g_model(images, training=True)
-        feature_real, label_real = d_model(images, training=True)
+        
+        
+        reconstructed_images = g_model(real_images, training=True)
+        
+        grayscale_image = tf.image.rgb_to_grayscale(real_images)
+        
+        feature_real, label_real = d_model(grayscale_image, training=True)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=True)
 
@@ -737,7 +747,7 @@ def train_step(real_images):
         discriminator_real_average_out = tf.math.reduce_mean(label_real, axis=0)
         real_fake_ra_out = label_real - discriminator_fake_average_out
         fake_real_ra_out = label_fake - discriminator_real_average_out
-
+        epsilon = 0.000001
         # Loss 1: 
         # use relativistic average loss
         loss_gen_ra = -( 
@@ -809,7 +819,7 @@ if TRAIN:
         
         gen_loss_out = 0.0
         disc_loss_out = 0.0
-        epsilon = 0.000001
+        
         
         for images, _ in mini_dataset:
             g_loss, d_loss = train_step(images)
@@ -835,7 +845,7 @@ if TRAIN:
         d_model.set_weights(d_new_vars)
         
         # Evaluation loop
-        if meta_iter % 100 == 0 and meta_iter != 0:
+        if meta_iter+1 % 100 == 0 and meta_iter != 0:
             eval_g_model = g_model
             eval_d_model = d_model
             iter_list = np.append(iter_list, meta_iter)
@@ -843,7 +853,7 @@ if TRAIN:
             disc_loss_list = np.append(disc_loss_list, disc_loss_out)
 
             # range between 0-1
-            anomaly_weight = 0.1
+            anomaly_weight = 0.9
 
             scores_ano = []
             real_label = []
@@ -851,7 +861,8 @@ if TRAIN:
             for images, labels in eval_ds:
                 # print(images)
                 reconstructed_images = eval_g_model(images, training=False)
-                feature_real, label_real  = eval_d_model(images, training=False)
+                grayscale_image = tf.image.rgb_to_grayscale(images)
+                feature_real, label_real  = eval_d_model(grayscale_image, training=False)
                 # print(generated_images.shape)
                 feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
 
