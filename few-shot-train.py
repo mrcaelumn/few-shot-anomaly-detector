@@ -833,9 +833,11 @@ if TRAIN:
         d_model.set_weights(d_new_vars)
         
         # Evaluation loop
-        if meta_iter+1 % 100 == 0 and meta_iter != 0:
+        if meta_iter+1 % 100 == 0:
+            
             eval_g_model = g_model
             eval_d_model = d_model
+            
             iter_list = np.append(iter_list, meta_iter)
             gen_loss_list = np.append(gen_loss_list, gen_loss_out)
             disc_loss_list = np.append(disc_loss_list, disc_loss_out)
