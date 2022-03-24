@@ -446,7 +446,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         feature_fake, label_fake = d_model(reconstructed_images, training=False)
 
         # Loss 2: RECONSTRUCTION loss (L1)
-        loss_rec = tf.reduce_mean(mae(images, reconstructed_images))
+        loss_rec = mae(grayscale_image, reconstructed_images)
 
         loss_feat = feat(feature_real, feature_fake)
 
@@ -769,16 +769,16 @@ def train_step(real_images):
         )
 
         # Loss 2: RECONSTRUCTION loss (L1)
-        loss_rec = mae(images, reconstructed_images)
+        loss_rec = mae(grayscale_image, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        loss_ssim =  ssim(images, reconstructed_images)
+        loss_ssim =  ssim(grayscale_image, reconstructed_images)
 
         # Loss 4: FEATURE Loss
         loss_feat = feat(feature_real, feature_fake)
 
         # Loss 5: GMS loss
-        loss_gms = gms(images, reconstructed_images)
+        # loss_gms = gms(images, reconstructed_images)
 
         # Loss 6: MSGMS loss
         # loss_msgms = msgms(images, reconstructed_images)
@@ -867,7 +867,7 @@ if TRAIN:
                 feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
 
                 # Loss 2: RECONSTRUCTION loss (L1)
-                loss_rec = mae(images, reconstructed_images)
+                loss_rec = mae(grayscale_image, reconstructed_images)
                 
                 loss_feat = feat(feature_real, feature_fake)
                 # print("loss_rec:", loss_rec, "loss_feat:", loss_feat)
