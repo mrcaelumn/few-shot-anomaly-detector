@@ -4,13 +4,6 @@
 # In[ ]:
 
 
-import logging, os
-
-logging.disable(logging.WARNING)
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-
-
-
 import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_io as tfio
@@ -425,76 +418,6 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
 # In[ ]:
 
 
-def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
-    g_model_inner.load_weights(g_filepath)
-    d_model_inner.load_weights(d_filepath)
-    
-    anomaly_weight = 0.1
-        
-    scores_ano = []
-    real_label = []
-    rec_loss_list = []
-    feat_loss_list = []
-    ssim_loss_list = []
-    
-    for images, labels in test_ds:
-
-        reconstructed_images = g_model(images, training=False)
-        grayscale_image = tf.image.rgb_to_grayscale(images)
-        feature_real, label_real  = d_model(grayscale_image, training=False)
-        # print(generated_images.shape)
-        feature_fake, label_fake = d_model(reconstructed_images, training=False)
-
-        # Loss 2: RECONSTRUCTION loss (L1)
-        loss_rec = mae(grayscale_image, reconstructed_images)
-
-        loss_feat = feat(feature_real, feature_fake)
-
-        score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
-
-        scores_ano = np.append(scores_ano, score.numpy())
-        real_label = np.append(real_label, labels.numpy()[0])
-        
-        rec_loss_list = np.append(rec_loss_list, loss_rec)
-        feat_loss_list = np.append(feat_loss_list, loss_feat)
-        
-    ''' Scale scores vector between [0, 1]'''
-    scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
-    
-    auc_out, threshold = roc(real_label, scores_ano, name_model)
-    print("auc: ", auc_out)
-    print("threshold: ", threshold)
-
-
-
-    scores_ano = (scores_ano > threshold).astype(int)
-    cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
-    TP = cm[1][1]
-    FP = cm[0][1]
-    FN = cm[1][0]
-    TN = cm[0][0]
-    print(cm)
-    print(
-            "model saved. TP %d:, FP=%d, FN=%d, TN=%d" % (TP, FP, FN, TN)
-    )
-    plot_confusion_matrix(cm, class_names, title=name_model)
-
-    diagonal_sum = cm.trace()
-    sum_of_all_elements = cm.sum()
-
-    print("Accuracy: ", diagonal_sum / sum_of_all_elements )
-    print("False Alarm Rate (FPR): ", FP/(FP+TN))
-    print("Leakage Rat (FNR): ", FN/(FN+TP))
-    print("TNR: ", TN/(FP+TN))
-    print("precision_score: ", TP/(TP+FP))
-    print("recall_score: ", TP/(TP+FN))
-    print("NPV: ", TN/(FN+TN))
-    print("F1-Score: ", f1_score(real_label, scores_ano))
-
-
-# In[ ]:
-
-
 class Dataset:
     # This class will facilitate the creation of a few-shot dataset
     # from the Omniglot dataset that can be sampled from quickly while also
@@ -691,6 +614,22 @@ def build_discriminator(inputs):
 # In[ ]:
 
 
+def autoencoder(inputs):
+
+    # Encoder
+    net = tf.keras.layers.Conv2D(IMG_H, 2, activation="relu")(inputs)
+    net = tf.keras.layers.MaxPool2D(2, 2, padding = 'same')(net)
+
+    # Decoder
+    net = tf.keras.layers.Resizing(IMG_H, IMG_W, interpolation="nearest")(net)
+    net = tf.keras.layers.Conv2D(1, 2, activation = None, name = 'outputOfAuto')(net)
+
+    return net
+
+
+# In[ ]:
+
+
 input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
 inputs_gen = tf.keras.layers.Input(input_shape, name="input_1")
@@ -698,7 +637,7 @@ inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
 
 g_model = build_generator_resnet50_unet(inputs_gen)
 d_model = build_discriminator(inputs_disc)
-
+grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
 d_model.compile()
 g_model.compile()
 g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
@@ -706,6 +645,76 @@ g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 # d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+
+
+# In[ ]:
+
+
+def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
+    g_model_inner.load_weights(g_filepath)
+    d_model_inner.load_weights(d_filepath)
+    
+    anomaly_weight = 0.1
+        
+    scores_ano = []
+    real_label = []
+    rec_loss_list = []
+    feat_loss_list = []
+    ssim_loss_list = []
+    
+    for images, labels in test_ds:
+
+        reconstructed_images = g_model(images, training=False)
+        grayscale_image = tf.image.rgb_to_grayscale(images)
+        feature_real, label_real  = d_model(grayscale_image, training=False)
+        # print(generated_images.shape)
+        feature_fake, label_fake = d_model(reconstructed_images, training=False)
+
+        # Loss 2: RECONSTRUCTION loss (L1)
+        loss_rec = mae(grayscale_image, reconstructed_images)
+
+        loss_feat = feat(feature_real, feature_fake)
+
+        score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
+
+        scores_ano = np.append(scores_ano, score.numpy())
+        real_label = np.append(real_label, labels.numpy()[0])
+        
+        rec_loss_list = np.append(rec_loss_list, loss_rec)
+        feat_loss_list = np.append(feat_loss_list, loss_feat)
+        
+    ''' Scale scores vector between [0, 1]'''
+    scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
+    
+    auc_out, threshold = roc(real_label, scores_ano, name_model)
+    print("auc: ", auc_out)
+    print("threshold: ", threshold)
+
+
+
+    scores_ano = (scores_ano > threshold).astype(int)
+    cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
+    TP = cm[1][1]
+    FP = cm[0][1]
+    FN = cm[1][0]
+    TN = cm[0][0]
+    print(cm)
+    print(
+            "model saved. TP %d:, FP=%d, FN=%d, TN=%d" % (TP, FP, FN, TN)
+    )
+    plot_confusion_matrix(cm, class_names, title=name_model)
+
+    diagonal_sum = cm.trace()
+    sum_of_all_elements = cm.sum()
+
+    print("Accuracy: ", diagonal_sum / sum_of_all_elements )
+    print("False Alarm Rate (FPR): ", FP/(FP+TN))
+    print("Leakage Rat (FNR): ", FN/(FN+TP))
+    print("TNR: ", TN/(FP+TN))
+    print("precision_score: ", TP/(TP+FP))
+    print("recall_score: ", TP/(TP+FN))
+    print("NPV: ", TN/(FN+TN))
+    print("F1-Score: ", f1_score(real_label, scores_ano))
 
 
 # In[ ]:
@@ -736,7 +745,7 @@ def train_step(real_images):
         
         reconstructed_images = g_model(real_images, training=True)
         
-        grayscale_image = tf.image.rgb_to_grayscale(real_images)
+        grayscale_image = grayscale_converter(real_images)
         
         feature_real, label_real = d_model(grayscale_image, training=True)
         # print(generated_images.shape)
@@ -861,7 +870,7 @@ if TRAIN:
             for images, labels in eval_ds:
                 # print(images)
                 reconstructed_images = eval_g_model(images, training=False)
-                grayscale_image = tf.image.rgb_to_grayscale(images)
+                grayscale_image = grayscale_converter(images)
                 feature_real, label_real  = eval_d_model(grayscale_image, training=False)
                 # print(generated_images.shape)
                 feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
