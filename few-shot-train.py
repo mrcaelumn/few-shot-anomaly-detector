@@ -833,7 +833,7 @@ if TRAIN:
         d_model.set_weights(d_new_vars)
         
         # Evaluation loop
-        if meta_iter+1 % 100 == 0:
+        if (meta_iter + 1) % 100 == 0:
             
             eval_g_model = g_model
             eval_d_model = d_model
