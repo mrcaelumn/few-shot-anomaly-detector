@@ -8,6 +8,7 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_io as tfio
 import tensorflow_addons as tfa
+import itertools
 
 import os
 from tqdm import tqdm
@@ -838,7 +839,8 @@ if TRAIN:
         d_model.set_weights(d_new_vars)
         
         # Evaluation loop
-        if (meta_iter + 1) % 100 == 0:
+        meta_iter = meta_iter + 1
+        if meta_iter % 100 == 0:
             
             eval_g_model = g_model
             eval_d_model = d_model
