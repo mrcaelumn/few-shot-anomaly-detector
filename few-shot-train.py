@@ -617,9 +617,10 @@ def build_discriminator(inputs):
 input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
 inputs = tf.keras.layers.Input(input_shape, name="input_1")
+inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
 
 g_model = build_generator_resnet50_unet(inputs)
-d_model = build_discriminator(inputs)
+d_model = build_discriminator(inputs_disc)
 grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
 d_model.compile()
 g_model.compile()
@@ -709,7 +710,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
 
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
-# SSIM_REG_RATE_LF = 10
+SSIM_REG_RATE_LF = 10
 GMS_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
@@ -780,7 +781,8 @@ def train_step(real_images):
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
             + (loss_feat * FEAT_REG_RATE_LF) 
-            + (loss_ssim * GMS_REG_RATE_LF) 
+            + (loss_ssim * SSIM_REG_RATE_LF) 
+            + (loss_gms * GMS_REG_RATE_LF) 
         )
 
         disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
