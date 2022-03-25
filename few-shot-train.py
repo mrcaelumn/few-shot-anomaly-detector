@@ -391,8 +391,6 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         plt.imshow(img.numpy().astype("int64"), alpha=1.0)
         plt.axis('off')
 
-
-
        
         img = tf.cast(img, tf.float64)
         img = (img - 127.5) / 127.5
@@ -782,7 +780,7 @@ def train_step(real_images):
             + (loss_rec * REC_REG_RATE_LF) 
             + (loss_feat * FEAT_REG_RATE_LF) 
             + (loss_ssim * SSIM_REG_RATE_LF) 
-            + (loss_gms * GMS_REG_RATE_LF) 
+            # + (loss_gms * GMS_REG_RATE_LF) 
         )
 
         disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
