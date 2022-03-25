@@ -650,7 +650,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
 
         reconstructed_images = g_model(images, training=False)
         
-        images = grayscale_converter(images)
+        # images = grayscale_converter(images)
         
         feature_real, label_real  = d_model(images, training=False)
         # print(generated_images.shape)
@@ -729,7 +729,7 @@ def train_step(real_images):
         # tf.print("Images: ", images)
         reconstructed_images = g_model(real_images, training=True)
         
-        real_images = grayscale_converter(real_images)
+        # real_images = grayscale_converter(real_images)
         feature_real, label_real = d_model(real_images, training=True)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=True)
@@ -856,7 +856,7 @@ if TRAIN:
             for images, labels in eval_ds:
                 # print(images)
                 reconstructed_images = eval_g_model(images, training=False)
-                images = grayscale_converter(images)
+                # images = grayscale_converter(images)
                 feature_real, label_real  = eval_d_model(images, training=False)
                 # print(generated_images.shape)
                 feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
