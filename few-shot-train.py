@@ -577,7 +577,7 @@ def build_generator_resnet50_unet(inputs):
     d4 = decoder_block(d3, s1, x)                      ## (256 x 256)
     
     """ Output """
-    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(1, 1, padding="same", activation="tanh")(d4)
     # outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d4)
 
     model = tf.keras.models.Model(inputs, outputs)
@@ -620,7 +620,7 @@ inputs = tf.keras.layers.Input(input_shape, name="input_1")
 
 g_model = build_generator_resnet50_unet(inputs)
 d_model = build_discriminator(inputs)
-# grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
+grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
 d_model.compile()
 g_model.compile()
 g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
@@ -634,6 +634,8 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
+    class_names = ["normal", "defect"] # normal = 0, defect = 1
+    
     g_model_inner.load_weights(g_filepath)
     d_model_inner.load_weights(d_filepath)
     
@@ -648,7 +650,9 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     for images, labels in test_ds:
 
         reconstructed_images = g_model(images, training=False)
-        # grayscale_image = tf.imagergb_to_grayscale(images)
+        
+        images = grayscale_converter(images)
+        
         feature_real, label_real  = d_model(images, training=False)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=False)
@@ -726,6 +730,7 @@ def train_step(real_images):
         # tf.print("Images: ", images)
         reconstructed_images = g_model(real_images, training=True)
         
+        real_images = grayscale_converter(real_images)
         feature_real, label_real = d_model(real_images, training=True)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=True)
@@ -851,7 +856,7 @@ if TRAIN:
             for images, labels in eval_ds:
                 # print(images)
                 reconstructed_images = eval_g_model(images, training=False)
-                
+                images = grayscale_converter(images)
                 feature_real, label_real  = eval_d_model(images, training=False)
                 # print(generated_images.shape)
                 feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
