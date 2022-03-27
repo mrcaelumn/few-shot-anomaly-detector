@@ -39,7 +39,7 @@ TRAIN = True
 
 LIMIT_TEST_IMAGES = 100
 
-learning_rate = 0.002
+learning_rate = 0.001
 meta_step_size = 0.25
 
 inner_batch_size = 25
@@ -104,6 +104,22 @@ class FeatureLoss(tf.keras.losses.Loss):
         # Loss 4: FEATURE Loss
         loss_feat = tf.reduce_mean(tf.pow((real-fake), 2))
         return loss_feat
+
+class MultiFeatureLoss(tf.keras.losses.Loss):
+    def __init__(self,
+             reduction=tf.keras.losses.Reduction.AUTO,
+             name='FeatureLoss'):
+        super().__init__(reduction=reduction, name=name)
+        self.mse_func = tf.keras.losses.MeanSquaredError() 
+
+    
+    def call(self, real, fake, weight=1):
+        result = 0
+        for r, f in zip(real, fake):
+            result = result + (weight * self.mse_func(r, f))
+        
+        return result
+    
     
 # class for Adversarial loss function
 class AdversarialLoss(tf.keras.losses.Loss):
@@ -193,6 +209,8 @@ def roc(labels, scores, name_model):
 mae = tf.keras.losses.MeanAbsoluteError()
 # L2 Loss
 mse = tf.keras.losses.MeanSquaredError() 
+
+multimse = MultiFeatureLoss()
 # Feature Loss
 feat = FeatureLoss()
 # SSIM loss
@@ -290,6 +308,11 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.savefig(model_name+ '_'+name+'_iters_result.png')
     plt.show()
     plt.clf()
+    
+def enhance_image(image, beta=0.5):
+    image = tf.cast(image, tf.float64)
+    image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
+    return image
 
 
 # In[ ]:
@@ -322,11 +345,13 @@ def read_data_with_labels(filepath, class_names):
     return image_list, label_list
 
 def prep_stage(x, train=True):
-    
+    beta_contrast = 0.2
     if train:
         # x = tf.image.adjust_contrast(x, -4)
+        x = enhance_image (x, beta_contrast)
         x = tf.image.resize(x, (IMG_H, IMG_W))
     else: 
+        x = enhance_image (x, beta_contrast)
         x = tf.image.resize(x, (IMG_H, IMG_W))
         
     return x
@@ -527,12 +552,12 @@ eval_ds = eval_dataset.get_dataset(1)
 
 
 def conv_block(input, num_filters):
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(12,12), padding="same")(input)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
     # x = tf.keras.layers.ReLU()(x)
 
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(12,12), padding="same")(x)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
     # x = tf.keras.layers.ReLU()(x)
@@ -540,7 +565,7 @@ def conv_block(input, num_filters):
     return x
 
 def decoder_block(input, skip_features, num_filters):
-    x = tf.keras.layers.Conv2DTranspose(num_filters, (10, 10), strides=2, padding="same")(input)
+    x = tf.keras.layers.Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(input)
     x = tf.keras.layers.Concatenate()([x, skip_features])
     x = conv_block(x, num_filters)
     return x
@@ -591,20 +616,23 @@ def build_generator_resnet50_unet(inputs):
 def build_discriminator(inputs):
     f = [2**i for i in range(4)]
     x = inputs
+    features = []
     for i in range(0, 4):
-        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (12, 12), strides=(2, 2), padding='same')(x)
+        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
         x = tf.keras.layers.BatchNormalization()(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
-        x = tf.keras.layers.Dropout(0.3)(x)
+        
+        features.append(x)
+        # x = tf.keras.layers.Dropout(0.3)(x)
 
     
-    feature = x
+    # feature = x
     
     x = tf.keras.layers.Flatten()(x)
     output = tf.keras.layers.Dense(1, activation="tanh")(x)
     # output = tf.keras.layers.Dense(1)(x)
     
-    model = tf.keras.models.Model(inputs, outputs = [feature, output])
+    model = tf.keras.models.Model(inputs, outputs = [features, output])
     
     return model
     # return x
@@ -639,7 +667,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     g_model_inner.load_weights(g_filepath)
     d_model_inner.load_weights(d_filepath)
     
-    anomaly_weight = 0.1
+    anomaly_weight = 0.9
         
     scores_ano = []
     real_label = []
@@ -765,13 +793,14 @@ def train_step(real_images):
         loss_rec = mae(real_images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        loss_ssim =  ssim(real_images, reconstructed_images)
+        # loss_ssim =  ssim(real_images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
-        loss_feat = feat(feature_real, feature_fake)
+        # loss_feat = feat(feature_real, feature_fake)
+        loss_feat = multimse(feature_real, feature_fake, FEAT_REG_RATE_LF)
 
         # Loss 5: GMS loss
-        loss_gms = gms(images, reconstructed_images)
+        # loss_gms = gms(images, reconstructed_images)
 
         # Loss 6: MSGMS loss
         # loss_msgms = msgms(images, reconstructed_images)
@@ -779,9 +808,9 @@ def train_step(real_images):
         gen_loss = tf.reduce_mean( 
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
-            + (loss_feat * FEAT_REG_RATE_LF) 
-            + (loss_ssim * SSIM_REG_RATE_LF) 
-            + (loss_gms * GMS_REG_RATE_LF) 
+            + (loss_feat) 
+            # + (loss_ssim * SSIM_REG_RATE_LF) 
+            # + (loss_gms * GMS_REG_RATE_LF) 
         )
 
         disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
