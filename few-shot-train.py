@@ -688,7 +688,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         # Loss 2: RECONSTRUCTION loss (L1)
         loss_rec = mae(images, reconstructed_images)
 
-        loss_feat = feat(feature_real, feature_fake)
+        loss_feat = multimse(feature_real, feature_fake)
 
         score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
 
@@ -895,7 +895,7 @@ if TRAIN:
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = mae(images, reconstructed_images)
                 
-                loss_feat = feat(feature_real, feature_fake)
+                loss_feat = multimse(feature_real, feature_fake)
                 # print("loss_rec:", loss_rec, "loss_feat:", loss_feat)
                 score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
                 # print(
