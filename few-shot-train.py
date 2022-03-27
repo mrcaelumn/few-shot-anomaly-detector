@@ -39,7 +39,7 @@ TRAIN = True
 
 LIMIT_TEST_IMAGES = 100
 
-learning_rate = 0.001
+learning_rate = 0.002
 meta_step_size = 0.25
 
 inner_batch_size = 25
@@ -50,7 +50,7 @@ eval_iters = 1
 inner_iters = 4
 
 train_shots = 40
-shots = 10
+shots = 20
 classes = 1
 
 dataset_name = "numbers"
@@ -114,7 +114,7 @@ class MultiFeatureLoss(tf.keras.losses.Loss):
 
     
     def call(self, real, fake, weight=1):
-        result = 0
+        result = 0.0
         for r, f in zip(real, fake):
             result = result + (weight * self.mse_func(r, f))
         
@@ -347,7 +347,6 @@ def read_data_with_labels(filepath, class_names):
 def prep_stage(x, train=True):
     beta_contrast = 0.2
     if train:
-        # x = tf.image.adjust_contrast(x, -4)
         x = enhance_image (x, beta_contrast)
         x = tf.image.resize(x, (IMG_H, IMG_W))
     else: 
@@ -614,20 +613,24 @@ def build_generator_resnet50_unet(inputs):
 
 # create discriminator model
 def build_discriminator(inputs):
-    f = [2**i for i in range(4)]
+    num_layers = 5
+    f = [2**i for i in range(num_layers)]
     x = inputs
     features = []
-    for i in range(0, 4):
-        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
-        x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.keras.layers.LeakyReLU(0.2)(x)
+    for i in range(0, num_layers):
+        
+        if i == 0:
+            x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.LeakyReLU(0.2)(x)
+        else:
+            x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.LeakyReLU(0.2)(x)
+            # x = tf.keras.layers.Dropout(0.3)(x)
         
         features.append(x)
-        # x = tf.keras.layers.Dropout(0.3)(x)
-
-    
+        
     # feature = x
-    
     x = tf.keras.layers.Flatten()(x)
     output = tf.keras.layers.Dense(1, activation="tanh")(x)
     # output = tf.keras.layers.Dense(1)(x)
