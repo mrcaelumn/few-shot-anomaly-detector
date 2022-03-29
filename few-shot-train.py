@@ -90,20 +90,6 @@ class SSIMLoss(tf.keras.losses.Loss):
         loss_ssim = tf.reduce_mean(1 - tf.image.ssim(ori, recon, 2.0))
         return loss_ssim
     
-# class for Feature loss function
-class FeatureLoss(tf.keras.losses.Loss):
-    def __init__(self,
-             reduction=tf.keras.losses.Reduction.AUTO,
-             name='FeatureLoss'):
-        super().__init__(reduction=reduction, name=name)
-
-    
-    def call(self, real, fake):
-        fake = tf.convert_to_tensor(fake)
-        real = tf.cast(real, fake.dtype)
-        # Loss 4: FEATURE Loss
-        loss_feat = tf.reduce_mean(tf.pow((real-fake), 2))
-        return loss_feat
 
 class MultiFeatureLoss(tf.keras.losses.Loss):
     def __init__(self,
@@ -166,8 +152,6 @@ mae = tf.keras.losses.MeanAbsoluteError()
 mse = tf.keras.losses.MeanSquaredError() 
 
 multimse = MultiFeatureLoss()
-# Feature Loss
-feat = FeatureLoss()
 # SSIM loss
 ssim = SSIMLoss()
 
@@ -581,7 +565,7 @@ def build_discriminator(inputs):
     # feature = x
     x = tf.keras.layers.Flatten()(x)
     features.append(x)
-    output = tf.keras.layers.Dense(1, activation="tanh")(x)
+    output = tf.keras.layers.Dense(1, activation="sigmoid")(x)
     # output = tf.keras.layers.Dense(1)(x)
     
     model = tf.keras.models.Model(inputs, outputs = [features, output])
@@ -690,7 +674,6 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
 SSIM_REG_RATE_LF = 10
-GMS_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
 
@@ -748,21 +731,14 @@ def train_step(real_images):
         # loss_ssim =  ssim(real_images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
-        # loss_feat = feat(feature_real, feature_fake)
+        # loss_feat = mse(feature_real, feature_fake)
         loss_feat = multimse(feature_real, feature_fake, FEAT_REG_RATE_LF)
 
-        # Loss 5: GMS loss
-        # loss_gms = gms(images, reconstructed_images)
-
-        # Loss 6: MSGMS loss
-        # loss_msgms = msgms(images, reconstructed_images)
 
         gen_loss = tf.reduce_mean( 
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
             + (loss_feat) 
-            # + (loss_ssim * SSIM_REG_RATE_LF) 
-            # + (loss_gms * GMS_REG_RATE_LF) 
         )
 
         disc_loss = tf.reduce_mean( (loss_disc_ra * ADV_REG_RATE_LF) + (loss_feat * FEAT_REG_RATE_LF) )
@@ -824,9 +800,6 @@ if TRAIN:
         meta_iter = meta_iter + 1
         if meta_iter % 100 == 0:
             
-            eval_g_model = g_model
-            eval_d_model = d_model
-            
             iter_list = np.append(iter_list, meta_iter)
             gen_loss_list = np.append(gen_loss_list, gen_loss_out)
             disc_loss_list = np.append(disc_loss_list, disc_loss_out)
@@ -839,11 +812,11 @@ if TRAIN:
             
             for images, labels in eval_ds:
                 # print(images)
-                reconstructed_images = eval_g_model(images, training=False)
+                reconstructed_images = g_model(images, training=False)
                 # images = grayscale_converter(images)
-                feature_real, label_real  = eval_d_model(images, training=False)
+                feature_real, label_real  = d_model(images, training=False)
                 # print(generated_images.shape)
-                feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
+                feature_fake, label_fake = d_model(reconstructed_images, training=False)
 
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = mae(images, reconstructed_images)
@@ -851,11 +824,7 @@ if TRAIN:
                 loss_feat = multimse(feature_real, feature_fake)
                 # print("loss_rec:", loss_rec, "loss_feat:", loss_feat)
                 score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
-                # print(
-                #     "loss_rec:", loss_rec, 
-                #     "loss_feat:", loss_feat, 
-                #     "score:", score
-                # )
+                
                 scores_ano = np.append(scores_ano, score.numpy())
                 real_label = np.append(real_label, labels.numpy()[0])
             
@@ -880,6 +849,7 @@ if TRAIN:
                 best_d_model_path = d_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out}.h5")
                 g_model.save(best_g_model_path)
                 d_model.save(best_d_model_path)
+                best_auc = auc_out
             # save model's weights
             g_model.save(g_model_path)
             d_model.save(d_model_path)
