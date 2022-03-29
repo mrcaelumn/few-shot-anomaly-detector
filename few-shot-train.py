@@ -49,8 +49,8 @@ meta_iters = 2000
 eval_iters = 1
 inner_iters = 4
 
-train_shots = 40
-shots = 20
+train_shots = 20
+shots = 50
 classes = 1
 
 dataset_name = "numbers"
@@ -135,50 +135,6 @@ class AdversarialLoss(tf.keras.losses.Loss):
         # Loss 4: FEATURE Loss
         return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_in, labels=labels_in))
 
-# class for Gradient Magnitude similarity loss function
-class GMSLoss(tf.keras.losses.Loss):
-    def __init__(self,
-             reduction=tf.keras.losses.Reduction.AUTO,
-             name='GMSLoss'):
-        super().__init__(reduction=reduction, name=name)
-
-    
-    def call(self, ori, recon):
-        c=0.0026
-        recon = tf.convert_to_tensor(recon)
-        ori = tf.cast(ori, recon.dtype)
-        
-        # tfa.image.median_filter2d
-        x = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(ori, padding="REFLECT"))
-        y = tfio.experimental.filter.prewitt(tfa.image.median_filter2d(recon, padding="REFLECT"))
-        
-        g_I = tf.reduce_mean(ori, axis=1, keepdims=True)
-        g_Ir = tf.reduce_mean(recon, axis=1, keepdims=True)
-        
-        g_map = (2 * g_I * g_Ir + c) / (g_I**2 + g_Ir**2 + c)
-        
-        return tf.reduce_mean(1 - g_map)
-    
-# class for MS Gradient Magnitude similarity loss function
-class MSGMSLoss(tf.keras.losses.Loss):
-    def __init__(self,
-             reduction=tf.keras.losses.Reduction.AUTO,
-             name='MSGMSLoss'):
-        super().__init__(reduction=reduction, name=name)
-        self.gms_Loss = GMSLoss()
-
-    
-    def call(self, ori, recon):
-        
-        total_loss = self.gms_Loss(ori, recon)
-        
-        for _ in range(3):
-            ori = tf.nn.avg_pool2d(ori, ksize=2, strides=2, padding='SAME')
-            recon = tf.nn.avg_pool2d(recon, ksize=2, strides=2, padding='SAME')
-            total_loss += self.gms_Loss(ori, recon)
-
-        return total_loss / 4
-
 
 # In[ ]:
 
@@ -204,7 +160,6 @@ def roc(labels, scores, name_model):
 
 
 # delcare all loss function that we will use
-
 # L1 Loss
 mae = tf.keras.losses.MeanAbsoluteError()
 # L2 Loss
@@ -215,10 +170,6 @@ multimse = MultiFeatureLoss()
 feat = FeatureLoss()
 # SSIM loss
 ssim = SSIMLoss()
-# GMS loss
-gms = GMSLoss()
-# MSGMS loss
-msgms = MSGMSLoss()
 
 
 # In[ ]:
@@ -345,7 +296,7 @@ def read_data_with_labels(filepath, class_names):
     return image_list, label_list
 
 def prep_stage(x, train=True):
-    beta_contrast = 0.2
+    beta_contrast = 0.1
     if train:
         x = enhance_image (x, beta_contrast)
         x = tf.image.resize(x, (IMG_H, IMG_W))
@@ -554,12 +505,10 @@ def conv_block(input, num_filters):
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
-    # x = tf.keras.layers.ReLU()(x)
 
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
-    # x = tf.keras.layers.ReLU()(x)
 
     return x
 
@@ -601,7 +550,6 @@ def build_generator_resnet50_unet(inputs):
     
     """ Output """
     outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
-    # outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d4)
 
     model = tf.keras.models.Model(inputs, outputs)
 
@@ -620,10 +568,10 @@ def build_discriminator(inputs):
     for i in range(0, num_layers):
         
         if i == 0:
-            x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
         else:
-            x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
             # x = tf.keras.layers.Dropout(0.3)(x)
@@ -632,6 +580,7 @@ def build_discriminator(inputs):
         
     # feature = x
     x = tf.keras.layers.Flatten()(x)
+    features.append(x)
     output = tf.keras.layers.Dense(1, activation="tanh")(x)
     # output = tf.keras.layers.Dense(1)(x)
     
@@ -842,6 +791,7 @@ if TRAIN:
         mini_dataset = train_dataset.get_mini_dataset(
             inner_batch_size, inner_iters, train_shots, classes
         )
+        best_auc = 0.0
         
         gen_loss_out = 0.0
         disc_loss_out = 0.0
@@ -920,7 +870,16 @@ if TRAIN:
             print(
                 "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
             )
-
+            
+            if auc_out > best_auc:
+                print(
+                    "the best model saved. at batch %d: with AUC=%f" % (meta_iter, auc_out)
+                )
+                
+                best_g_model_path = g_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out}.h5")
+                best_d_model_path = d_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out}.h5")
+                g_model.save(best_g_model_path)
+                d_model.save(best_d_model_path)
             # save model's weights
             g_model.save(g_model_path)
             d_model.save(d_model_path)
