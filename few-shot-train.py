@@ -249,6 +249,15 @@ def enhance_image(image, beta=0.5):
     image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
     return image
 
+def custom_v3(img):
+    img = tf.cast(img, tf.float64)
+    img = tfio.experimental.color.rgb_to_bgr(img)
+    img = tf.image.adjust_contrast(img, 11.)
+    img = tf.image.adjust_hue(img, 11.)
+    img = tf.image.adjust_gamma(img)
+    img = tfa.image.median_filter2d(img)
+    return img
+
 
 # In[ ]:
 
@@ -545,7 +554,7 @@ def build_generator_resnet50_unet(inputs):
 
 # create discriminator model
 def build_discriminator(inputs):
-    num_layers = 5
+    num_layers = 4
     f = [2**i for i in range(num_layers)]
     x = inputs
     features = []
@@ -563,15 +572,17 @@ def build_discriminator(inputs):
         features.append(x)
         
     # feature = x
-    x = tf.keras.layers.Flatten()(x)
+    x = tf.keras.layers.SeparableConv2D(1, (3, 3), padding='valid', use_bias=False)(x)
     features.append(x)
-    output = tf.keras.layers.Dense(1, activation="sigmoid")(x)
-    # output = tf.keras.layers.Dense(1)(x)
+    x = tf.keras.layers.Flatten()(x)
+    # features.append(x)
+    # output = tf.keras.layers.Dense(1, activation="sigmoid")(x)
+    output = tf.keras.layers.Activation('sigmoid')(x)
+
     
     model = tf.keras.models.Model(inputs, outputs = [features, output])
     
     return model
-    # return x
 
 
 # In[ ]:
@@ -845,8 +856,8 @@ if TRAIN:
                     "the best model saved. at batch %d: with AUC=%f" % (meta_iter, auc_out)
                 )
                 
-                best_g_model_path = g_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out}.h5")
-                best_d_model_path = d_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out}.h5")
+                best_g_model_path = g_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out:.2f}.h5")
+                best_d_model_path = d_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out:.2f}.h5")
                 g_model.save(best_g_model_path)
                 d_model.save(best_d_model_path)
                 best_auc = auc_out
