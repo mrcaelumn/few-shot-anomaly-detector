@@ -291,10 +291,12 @@ def read_data_with_labels(filepath, class_names):
 def prep_stage(x, train=True):
     beta_contrast = 0.1
     if train:
-        x = enhance_image (x, beta_contrast)
+        x = enhance_image(x, beta_contrast)
+        x = custom_v3(x, beta_contrast)
         x = tf.image.resize(x, (IMG_H, IMG_W))
     else: 
-        x = enhance_image (x, beta_contrast)
+        x = enhance_image(x, beta_contrast)
+        x = custom_v3(x, beta_contrast)
         x = tf.image.resize(x, (IMG_H, IMG_W))
         
     return x
@@ -303,7 +305,8 @@ def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
-    img = tf.io.decode_png(img, channels=IMG_C)
+    # img = tf.io.decode_png(img, channels=IMG_C)
+    img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, True)
     img = tf.cast(img, tf.float32)
     # normalize to the range -1,1
@@ -554,7 +557,7 @@ def build_generator_resnet50_unet(inputs):
 
 # create discriminator model
 def build_discriminator(inputs):
-    num_layers = 4
+    num_layers = 5
     f = [2**i for i in range(num_layers)]
     x = inputs
     features = []
