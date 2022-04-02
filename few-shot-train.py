@@ -320,7 +320,8 @@ def extraction_test(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
-    img = tf.io.decode_png(img, channels=IMG_C)
+    # img = tf.io.decode_png(img, channels=IMG_C)
+    img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, False)
     img = tf.cast(img, tf.float32)
     # normalize to the range -1,1
