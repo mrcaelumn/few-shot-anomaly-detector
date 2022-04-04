@@ -50,7 +50,7 @@ eval_iters = 1
 inner_iters = 4
 
 train_shots = 20
-shots = 50
+shots = 20
 classes = 1
 
 dataset_name = "numbers"
@@ -244,16 +244,13 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.show()
     plt.clf()
     
-def enhance_image(image, beta=0.5):
+def enhance_image(image, beta=0.4):
     image = tf.cast(image, tf.float64)
     image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
     return image
 
 def custom_v3(img):
-    img = tf.cast(img, tf.float64)
-    img = tfio.experimental.color.rgb_to_bgr(img)
-    img = tf.image.adjust_contrast(img, 11.)
-    img = tf.image.adjust_hue(img, 11.)
+    img = tf.image.adjust_hue(img, 1.)
     img = tf.image.adjust_gamma(img)
     img = tfa.image.median_filter2d(img)
     return img
@@ -289,14 +286,14 @@ def read_data_with_labels(filepath, class_names):
     return image_list, label_list
 
 def prep_stage(x, train=True):
-    beta_contrast = 0.1
+    beta_contrast = 0.4
     if train:
-        x = enhance_image(x, beta_contrast)
-        x = custom_v3(x, beta_contrast)
+        # x = enhance_image(x, beta_contrast)
+        x = custom_v3(x)
         x = tf.image.resize(x, (IMG_H, IMG_W))
     else: 
         x = enhance_image(x, beta_contrast)
-        x = custom_v3(x, beta_contrast)
+        x = custom_v3(x)
         x = tf.image.resize(x, (IMG_H, IMG_W))
         
     return x
@@ -305,8 +302,8 @@ def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
-    # img = tf.io.decode_png(img, channels=IMG_C)
-    img = tf.io.decode_bmp(img, channels=IMG_C)
+    img = tf.io.decode_png(img, channels=IMG_C)
+    # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, True)
     img = tf.cast(img, tf.float32)
     # normalize to the range -1,1
@@ -320,8 +317,8 @@ def extraction_test(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
-    # img = tf.io.decode_png(img, channels=IMG_C)
-    img = tf.io.decode_bmp(img, channels=IMG_C)
+    img = tf.io.decode_png(img, channels=IMG_C)
+    # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, False)
     img = tf.cast(img, tf.float32)
     # normalize to the range -1,1
@@ -354,10 +351,9 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         axes=[]
         fig = plt.figure()
 
-
-        img = tf.io.read_file(v)
-        img = tf.io.decode_png(img, channels=IMG_C)
-        img = prep_stage(img)
+        
+        img, label = extraction(v, i)
+       
         name_subplot = mode+'_original_'+i
         axes.append( fig.add_subplot(rows, cols, 1) )
         axes[-1].set_title('_original_')  
@@ -370,7 +366,7 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
 
 
         image = tf.reshape(img, (-1, IMG_H, IMG_W, IMG_C))
-        reconstructed_images = self.generator.predict(image)
+        reconstructed_images = g_model_inner.predict(image)
         reconstructed_images = tf.reshape(reconstructed_images, (IMG_H, IMG_W, IMG_C))
         reconstructed_images = reconstructed_images * 127 + 127
 
@@ -406,14 +402,14 @@ class Dataset:
         self.ds = ds.shuffle(buffer_size=10240)
         
         
-        
-        for image, label in ds.map(extraction):
-            image = image.numpy()
-            label = str(label.numpy())
-            if label not in self.data:
-                self.data[label] = []
-            self.data[label].append(image)
-        self.labels = list(self.data.keys())
+        if training:
+            for image, label in ds.map(extraction):
+                image = image.numpy()
+                label = str(label.numpy())
+                if label not in self.data:
+                    self.data[label] = []
+                self.data[label].append(image)
+            self.labels = list(self.data.keys())
             
 
     def get_mini_dataset(
@@ -524,7 +520,7 @@ def build_generator_resnet50_unet(inputs):
     # print(inputs)
     # print("pretained start")
     """ Pre-trained ResNet50 Model """
-    resnet50 = tf.keras.applications.ResNet50(include_top=False, weights="imagenet", input_tensor=inputs)
+    resnet50 = tf.keras.applications.ResNet50(include_top=True, weights="imagenet", input_tensor=inputs)
 
     """ Encoder """
     s1 = resnet50.get_layer("input_1").output           ## (256 x 256)
@@ -558,32 +554,23 @@ def build_generator_resnet50_unet(inputs):
 
 # create discriminator model
 def build_discriminator(inputs):
-    num_layers = 5
+    num_layers = 4
     f = [2**i for i in range(num_layers)]
     x = inputs
     features = []
     for i in range(0, num_layers):
-        
-        if i == 0:
-            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
-            x = tf.keras.layers.LeakyReLU(0.2)(x)
-        else:
+
             x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
-            # x = tf.keras.layers.Dropout(0.3)(x)
+            x = tf.keras.layers.Dropout(0.3)(x)
         
         features.append(x)
-        
-    # feature = x
-    x = tf.keras.layers.SeparableConv2D(1, (3, 3), padding='valid', use_bias=False)(x)
-    features.append(x)
+           
     x = tf.keras.layers.Flatten()(x)
-    # features.append(x)
-    # output = tf.keras.layers.Dense(1, activation="sigmoid")(x)
-    output = tf.keras.layers.Activation('sigmoid')(x)
-
     
+    output = tf.keras.layers.Dense(1, activation="tanh")(x)
+
     model = tf.keras.models.Model(inputs, outputs = [features, output])
     
     return model
@@ -628,13 +615,13 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     
     for images, labels in test_ds:
 
-        reconstructed_images = g_model(images, training=False)
+        reconstructed_images = g_model_inner(images, training=False)
         
         # images = grayscale_converter(images)
         
-        feature_real, label_real  = d_model(images, training=False)
+        feature_real, label_real  = d_model_inner(images, training=False)
         # print(generated_images.shape)
-        feature_fake, label_fake = d_model(reconstructed_images, training=False)
+        feature_fake, label_fake = d_model_inner(reconstructed_images, training=False)
 
         # Loss 2: RECONSTRUCTION loss (L1)
         loss_rec = mae(images, reconstructed_images)
@@ -688,7 +675,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
 
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
-SSIM_REG_RATE_LF = 10
+SSIM_REG_RATE_LF = 50
 FEAT_REG_RATE_LF = 1
 
 
@@ -743,7 +730,7 @@ def train_step(real_images):
         loss_rec = mae(real_images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        # loss_ssim =  ssim(real_images, reconstructed_images)
+        loss_ssim =  ssim(real_images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
         # loss_feat = mse(feature_real, feature_fake)
@@ -753,6 +740,7 @@ def train_step(real_images):
         gen_loss = tf.reduce_mean( 
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
+            + (loss_ssim * SSIM_REG_RATE_LF) 
             + (loss_feat) 
         )
 
@@ -855,7 +843,7 @@ if TRAIN:
                 "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
             )
             
-            if auc_out > best_auc:
+            if auc_out >= best_auc:
                 print(
                     "the best model saved. at batch %d: with AUC=%f" % (meta_iter, auc_out)
                 )
