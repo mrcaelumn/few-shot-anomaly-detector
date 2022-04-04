@@ -560,10 +560,10 @@ def build_discriminator(inputs):
     features = []
     for i in range(0, num_layers):
 
-            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
-            x = tf.keras.layers.BatchNormalization()(x)
-            x = tf.keras.layers.LeakyReLU(0.2)(x)
-            x = tf.keras.layers.Dropout(0.3)(x)
+        x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+        x = tf.keras.layers.BatchNormalization()(x)
+        x = tf.keras.layers.LeakyReLU(0.2)(x)
+        x = tf.keras.layers.Dropout(0.3)(x)
         
         features.append(x)
            
