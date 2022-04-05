@@ -849,7 +849,7 @@ if TRAIN:
             TN = cm[0][0]
             print(cm)
             print(
-                f"model saved. batch {meta_iter}:, AUC={auc_out}, TP={TP}, TN={TN}, Gen Loss={gen_loss_out}, Disc Loss={disc_loss_out}" 
+                f"model saved. batch {meta_iter}:, AUC={auc_out:.3f}, TP={TP}, TN={TN}, Gen Loss={gen_loss_out:.5f}, Disc Loss={disc_loss_out:.5f}" 
             )
             
             if auc_out >= best_auc:
