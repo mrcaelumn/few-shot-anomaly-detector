@@ -87,7 +87,7 @@ class SSIMLoss(tf.keras.losses.Loss):
 
         # Loss 3: SSIM Loss
 #         loss_ssim =  tf.reduce_mean(1 - tf.image.ssim(ori, recon, max_val=1.0)[0]) 
-        loss_ssim = tf.reduce_mean(1 - tf.image.ssim_multiscale(ori, recon, max_val=IMG_W))
+        loss_ssim = tf.reduce_mean(1 - tf.image.ssim(ori, recon, max_val=IMG_W, filter_size=7, k1=0.01 ** 2, k2=0.03 ** 2))
         return loss_ssim
     
 
@@ -762,6 +762,7 @@ def train_step(real_images):
 
 if TRAIN:
     print("Start Trainning. ", name_model)
+    best_auc = 0.0
     for meta_iter in range(meta_iters):
         frac_done = meta_iter / meta_iters
         cur_meta_step_size = (1 - frac_done) * meta_step_size
@@ -772,8 +773,6 @@ if TRAIN:
         mini_dataset = train_dataset.get_mini_dataset(
             inner_batch_size, inner_iters, train_shots, classes
         )
-        best_auc = 0.0
-        
         gen_loss_out = 0.0
         disc_loss_out = 0.0
         
