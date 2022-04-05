@@ -677,7 +677,7 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
-SSIM_REG_RATE_LF = 50
+SSIM_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
 
@@ -849,12 +849,12 @@ if TRAIN:
             TN = cm[0][0]
             print(cm)
             print(
-                "model saved. batch %d:, AUC=%f, TP %d:, FP=%d, FN=%d, TN=%d, Gen Loss=%f, Disc Loss=%f" % (TP, FP, FN, TN , meta_iter, auc_out, gen_loss_out, disc_loss_out)
+                f"model saved. batch {meta_iter}:, AUC={auc_out}, TP={TP}, TN={TN}, Gen Loss={gen_loss_out}, Disc Loss={disc_loss_out}" 
             )
             
             if auc_out >= best_auc:
                 print(
-                    "the best model saved. at batch %d: with AUC=%f" % (meta_iter, auc_out)
+                    f"the best model saved. at batch {meta_iter}: with AUC={auc_out}"
                 )
                 
                 best_g_model_path = g_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out:.2f}.h5")
