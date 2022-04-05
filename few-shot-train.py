@@ -87,7 +87,7 @@ class SSIMLoss(tf.keras.losses.Loss):
 
         # Loss 3: SSIM Loss
 #         loss_ssim =  tf.reduce_mean(1 - tf.image.ssim(ori, recon, max_val=1.0)[0]) 
-        loss_ssim = tf.reduce_mean(1 - tf.image.ssim(ori, recon, 2.0))
+        loss_ssim = tf.reduce_mean(1 - tf.image.ssim_multiscale(ori, recon, max_val=IMG_W))
         return loss_ssim
     
 
@@ -277,9 +277,12 @@ def read_data_with_labels(filepath, class_names):
                 class_list.append(class_num)
                 # image_label_list.append({filpath:class_num})
         
-        path_list, class_list = shuffle(path_list, class_list, random_state=random.randint(123, 10000))
-        image_list = image_list + path_list[:LIMIT_TEST_IMAGES]
-        label_list = label_list + class_list[:LIMIT_TEST_IMAGES]
+        n_samples = None
+        if LIMIT_TEST_IMAGES != "MAX":
+            n_samples = LIMIT_TEST_IMAGES
+        path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
+        image_list = image_list + path_list
+        label_list = label_list + class_list
   
     # print(image_list, label_list)
     
@@ -396,10 +399,9 @@ class Dataset:
         
         class_names = ["normal"] if training else ["normal", "defect"]
         filenames, labels = read_data_with_labels(path_file, class_names)
-        # if training == False:
-        #     print("length: ", len(filenames))
+        
         ds = tf.data.Dataset.from_tensor_slices((filenames, labels))
-        self.ds = ds.shuffle(buffer_size=10240)
+        self.ds = ds.shuffle(buffer_size=1024, seed=random.randint(123, 10000) )
         
         
         if training:
@@ -579,26 +581,6 @@ def build_discriminator(inputs):
 # In[ ]:
 
 
-input_shape = (IMG_H, IMG_W, IMG_C)
-# set input 
-inputs = tf.keras.layers.Input(input_shape, name="input_1")
-# inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
-
-g_model = build_generator_resnet50_unet(inputs)
-d_model = build_discriminator(inputs)
-# grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
-d_model.compile()
-g_model.compile()
-g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-
-d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-
-
-# In[ ]:
-
-
 def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     class_names = ["normal", "defect"] # normal = 0, defect = 1
     
@@ -668,6 +650,26 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     print("recall_score: ", TP/(TP+FN))
     print("NPV: ", TN/(FN+TN))
     print("F1-Score: ", f1_score(real_label, scores_ano))
+
+
+# In[ ]:
+
+
+input_shape = (IMG_H, IMG_W, IMG_C)
+# set input 
+inputs = tf.keras.layers.Input(input_shape, name="input_1")
+# inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
+
+g_model = build_generator_resnet50_unet(inputs)
+d_model = build_discriminator(inputs)
+# grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
+d_model.compile()
+g_model.compile()
+g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+
+d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
