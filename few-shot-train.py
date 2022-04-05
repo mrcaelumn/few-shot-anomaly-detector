@@ -845,16 +845,16 @@ if TRAIN:
             cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
             TP = cm[1][1]
             FP = cm[0][1]
-            FN = cm[1][0]
-            TN = cm[0][0]
-            print(cm)
+            # FN = cm[1][0]
+            # TN = cm[0][0]
+            # print(cm)
             print(
                 f"model saved. batch {meta_iter}:, AUC={auc_out:.3f}, TP={TP}, TN={TN}, Gen Loss={gen_loss_out:.5f}, Disc Loss={disc_loss_out:.5f}" 
             )
             
             if auc_out >= best_auc:
                 print(
-                    f"the best model saved. at batch {meta_iter}: with AUC={auc_out}"
+                    f"the best model saved. at batch {meta_iter}: with AUC={auc_out:.3f}"
                 )
                 
                 best_g_model_path = g_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out:.2f}.h5")
