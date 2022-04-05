@@ -803,6 +803,8 @@ if TRAIN:
         # Evaluation loop
         meta_iter = meta_iter + 1
         if meta_iter % 100 == 0:
+            eval_g_model = g_model
+            eval_d_model = d_model
             
             iter_list = np.append(iter_list, meta_iter)
             gen_loss_list = np.append(gen_loss_list, gen_loss_out)
@@ -816,11 +818,11 @@ if TRAIN:
             
             for images, labels in eval_ds:
                 # print(images)
-                reconstructed_images = g_model(images, training=False)
+                reconstructed_images = eval_g_model(images, training=False)
                 # images = grayscale_converter(images)
-                feature_real, label_real  = d_model(images, training=False)
+                feature_real, label_real  = eval_d_model(images, training=False)
                 # print(generated_images.shape)
-                feature_fake, label_fake = d_model(reconstructed_images, training=False)
+                feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
 
                 # Loss 2: RECONSTRUCTION loss (L1)
                 loss_rec = mae(images, reconstructed_images)
@@ -837,11 +839,17 @@ if TRAIN:
             scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
             # print("real_label:", real_label)
             # print("scores_ano:", scores_ano)
-            auc_out, _ = roc(real_label, scores_ano, name_model)
+            auc_out, threshold = roc(real_label, scores_ano, name_model)
             auc_list = np.append(auc_list, auc_out)
-
+            scores_ano = (scores_ano > threshold).astype(int)
+            cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
+            TP = cm[1][1]
+            FP = cm[0][1]
+            FN = cm[1][0]
+            TN = cm[0][0]
+            print(cm)
             print(
-                "model saved. batch %d:, AUC=%f, Gen Loss=%f, Disc Loss=%f" % (meta_iter, auc_out, gen_loss_out, disc_loss_out)
+                "model saved. batch %d:, AUC=%f, TP %d:, FP=%d, FN=%d, TN=%d, Gen Loss=%f, Disc Loss=%f" % (TP, FP, FN, TN , meta_iter, auc_out, gen_loss_out, disc_loss_out)
             )
             
             if auc_out >= best_auc:
