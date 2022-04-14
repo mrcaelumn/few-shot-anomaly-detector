@@ -8,7 +8,7 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_io as tfio
 import tensorflow_addons as tfa
-import itertools
+import itertoo
 
 import os
 from tqdm import tqdm
@@ -27,8 +27,8 @@ import matplotlib.patches as mpatches
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-IMG_H = 128
-IMG_W = 128
+IMG_H = 256
+IMG_W = 256
 IMG_C = 3  ## Change this to 1 for grayscale.
 
 # Weight initializers for the Generator network
@@ -39,6 +39,8 @@ TRAIN = True
 
 LIMIT_TEST_IMAGES = 100
 
+# range between 0-1
+anomaly_weight = 0.7
 learning_rate = 0.002
 meta_step_size = 0.25
 
@@ -47,7 +49,7 @@ eval_batch_size = 25
 
 meta_iters = 2000
 eval_iters = 1
-inner_iters = 4
+inner_iters = 5
 
 train_shots = 20
 shots = 20
@@ -289,15 +291,17 @@ def read_data_with_labels(filepath, class_names):
     return image_list, label_list
 
 def prep_stage(x, train=True):
-    beta_contrast = 0.4
+    beta_contrast = 0.2
     if train:
-        # x = enhance_image(x, beta_contrast)
-        x = custom_v3(x)
+        x = enhance_image(x, beta_contrast)
+        # x = custom_v3(x)
         x = tf.image.resize(x, (IMG_H, IMG_W))
+        # x = tf.image.random_crop(x, (IMG_H, IMG_W))
     else: 
         x = enhance_image(x, beta_contrast)
-        x = custom_v3(x)
+        # x = custom_v3(x)
         x = tf.image.resize(x, (IMG_H, IMG_W))
+        # x = tf.image.random_crop(x, (IMG_H, IMG_W))
         
     return x
 
@@ -496,6 +500,25 @@ eval_ds = eval_dataset.get_dataset(1)
 # In[ ]:
 
 
+def calculate_a_score(out_g_model, out_d_model, images):
+    reconstructed_images = out_g_model(images, training=False)
+    # images = grayscale_converter(images)
+    feature_real, label_real  = out_d_model(images, training=False)
+    # print(generated_images.shape)
+    feature_fake, label_fake = out_d_model(reconstructed_images, training=False)
+
+    # Loss 2: RECONSTRUCTION loss (L1)
+    loss_rec = mae(images, reconstructed_images)
+
+    loss_feat = multimse(feature_real, feature_fake)
+    # print("loss_rec:", loss_rec, "loss_feat:", loss_feat)
+    score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
+    return score
+
+
+# In[ ]:
+
+
 def conv_block(input, num_filters):
     x = tf.keras.layers.Conv2D(num_filters, kernel_size=(4,4), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
@@ -556,21 +579,25 @@ def build_generator_resnet50_unet(inputs):
 
 # create discriminator model
 def build_discriminator(inputs):
-    num_layers = 4
+    num_layers = 5
     f = [2**i for i in range(num_layers)]
     x = inputs
     features = []
     for i in range(0, num_layers):
-
-        x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
-        x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.keras.layers.LeakyReLU(0.2)(x)
-        x = tf.keras.layers.Dropout(0.3)(x)
+        if i == 0:
+            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.BatchNormalization()(x)
+        
+        else:
+            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.LeakyReLU(0.2)(x)
+        # x = tf.keras.layers.Dropout(0.3)(x)
         
         features.append(x)
            
     x = tf.keras.layers.Flatten()(x)
-    
+    features.append(x)
     output = tf.keras.layers.Dense(1, activation="tanh")(x)
 
     model = tf.keras.models.Model(inputs, outputs = [features, output])
@@ -587,7 +614,6 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     g_model_inner.load_weights(g_filepath)
     d_model_inner.load_weights(d_filepath)
     
-    anomaly_weight = 0.9
         
     scores_ano = []
     real_label = []
@@ -596,22 +622,9 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     ssim_loss_list = []
     
     for images, labels in test_ds:
-
-        reconstructed_images = g_model_inner(images, training=False)
         
-        # images = grayscale_converter(images)
+        score = calculate_a_score(g_model_inner, d_model_inner, images)
         
-        feature_real, label_real  = d_model_inner(images, training=False)
-        # print(generated_images.shape)
-        feature_fake, label_fake = d_model_inner(reconstructed_images, training=False)
-
-        # Loss 2: RECONSTRUCTION loss (L1)
-        loss_rec = mae(images, reconstructed_images)
-
-        loss_feat = multimse(feature_real, feature_fake)
-
-        score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
-
         scores_ano = np.append(scores_ano, score.numpy())
         real_label = np.append(real_label, labels.numpy()[0])
         
@@ -762,7 +775,7 @@ def train_step(real_images):
 
 if TRAIN:
     print("Start Trainning. ", name_model)
-    best_auc = 0.0
+    best_auc = 6.0
     for meta_iter in range(meta_iters):
         frac_done = meta_iter / meta_iters
         cur_meta_step_size = (1 - frac_done) * meta_step_size
@@ -810,26 +823,12 @@ if TRAIN:
             gen_loss_list = np.append(gen_loss_list, gen_loss_out)
             disc_loss_list = np.append(disc_loss_list, disc_loss_out)
 
-            # range between 0-1
-            anomaly_weight = 0.9
-
             scores_ano = []
             real_label = []
             
             for images, labels in eval_ds:
-                # print(images)
-                reconstructed_images = eval_g_model(images, training=False)
-                # images = grayscale_converter(images)
-                feature_real, label_real  = eval_d_model(images, training=False)
-                # print(generated_images.shape)
-                feature_fake, label_fake = eval_d_model(reconstructed_images, training=False)
-
-                # Loss 2: RECONSTRUCTION loss (L1)
-                loss_rec = mae(images, reconstructed_images)
                 
-                loss_feat = multimse(feature_real, feature_fake)
-                # print("loss_rec:", loss_rec, "loss_feat:", loss_feat)
-                score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
+                score = calculate_a_score(eval_g_model, eval_d_model, images)
                 
                 scores_ano = np.append(scores_ano, score.numpy())
                 real_label = np.append(real_label, labels.numpy()[0])
@@ -844,9 +843,9 @@ if TRAIN:
             scores_ano = (scores_ano > threshold).astype(int)
             cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
             TP = cm[1][1]
-            FP = cm[0][1]
+            # FP = cm[0][1]
             # FN = cm[1][0]
-            # TN = cm[0][0]
+            TN = cm[0][0]
             # print(cm)
             print(
                 f"model saved. batch {meta_iter}:, AUC={auc_out:.3f}, TP={TP}, TN={TN}, Gen Loss={gen_loss_out:.5f}, Disc Loss={disc_loss_out:.5f}" 
