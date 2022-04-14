@@ -775,7 +775,7 @@ def train_step(real_images):
 
 if TRAIN:
     print("Start Trainning. ", name_model)
-    best_auc = 6.0
+    best_auc = 0.6
     for meta_iter in range(meta_iters):
         frac_done = meta_iter / meta_iters
         cur_meta_step_size = (1 - frac_done) * meta_step_size
