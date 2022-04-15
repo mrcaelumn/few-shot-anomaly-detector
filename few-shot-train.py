@@ -310,7 +310,7 @@ def read_data_with_labels(filepath, class_names):
     return image_list, label_list
 
 def prep_stage(x, train=True):
-    beta_contrast = 0.2
+    beta_contrast = 0.1
     
     if train:
         x = enhance_image(x, beta_contrast)
@@ -542,18 +542,18 @@ def calculate_a_score(out_g_model, out_d_model, images):
 
 
 def conv_block(input, num_filters):
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(4,4), padding="same")(input)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
 
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(4,4), padding="same")(x)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
 
     return x
 
 def decoder_block(input, skip_features, num_filters):
-    x = tf.keras.layers.Conv2DTranspose(num_filters, (3, 3), strides=2, padding="same")(input)
+    x = tf.keras.layers.Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(input)
     x = tf.keras.layers.Concatenate()([x, skip_features])
     x = conv_block(x, num_filters)
     return x
@@ -607,11 +607,11 @@ def build_discriminator(inputs):
     features = []
     for i in range(0, num_layers):
         if i == 0:
-            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
         
         else:
-            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
         # x = tf.keras.layers.Dropout(0.3)(x)
@@ -644,20 +644,22 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     ssim_loss_list = []
     
     for left_images, right_images, labels in test_ds:
-        loss_rec, loss_feat = 0.0
+        loss_rec, loss_feat = 0.0, 0.0
         l_score, l_rec_loss, l_feat_loss = calculate_a_score(g_model_inner, d_model_inner, left_images)
         r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, right_images)
         
         score = max(l_score.numpy(), r_score.numpy())
-        scores_ano = np.append(scores_ano, score)
-        real_label = np.append(real_label, labels.numpy()[0])
-        
         loss_rec = r_rec_loss
         loss_feat = r_feat_loss
         
         if score == l_score.numpy():
             loss_rec = l_rec_loss
             loss_feat = l_feat_loss
+            
+        scores_ano = np.append(scores_ano, score)
+        real_label = np.append(real_label, labels.numpy()[0])
+        
+        
         
         rec_loss_list = np.append(rec_loss_list, loss_rec)
         feat_loss_list = np.append(feat_loss_list, loss_feat)
@@ -860,20 +862,22 @@ if TRAIN:
            
             for left_images, right_images, labels in eval_ds:
 
-                loss_rec, loss_feat = 0.0
+                loss_rec, loss_feat = 0.0, 0.0
                 l_score, l_rec_loss, l_feat_loss = calculate_a_score(eval_g_model, eval_d_model, left_images)
                 r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, right_images)
 
                 score = max(l_score.numpy(), r_score.numpy())
-                scores_ano = np.append(scores_ano, score)
-                real_label = np.append(real_label, labels.numpy()[0])
-
                 loss_rec = r_rec_loss
                 loss_feat = r_feat_loss
 
                 if score == l_score.numpy():
                     loss_rec = l_rec_loss
                     loss_feat = l_feat_loss
+                    
+                scores_ano = np.append(scores_ano, score)
+                real_label = np.append(real_label, labels.numpy()[0])
+
+                
                     
                 scores_ano = np.append(scores_ano, score.numpy())
                 real_label = np.append(real_label, labels.numpy()[0])
