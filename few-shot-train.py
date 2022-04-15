@@ -254,17 +254,17 @@ def enhance_image(image, beta=0.1):
     image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
     return image
 
-def crop_left_and_right(img, width=256, height=256):
+def crop_left_and_right(img):
     # img_shape = tf.shape(img)
-    img_left = tf.image.crop_to_bounding_box(img, 0, 0, height, width)
-    img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - height, ORI_SIZE[1] - width, height, width)
+    img_left = tf.image.crop_to_bounding_box(img, 0, 0, IMG_H, IMG_W)
+    img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - IMG_H, ORI_SIZE[1] - IMG_W, IMG_H, IMG_W)
     
     return img_left, img_right
 
-def crop_left_and_right_select_one(img, width=256, height=256):
+def crop_left_and_right_select_one(img):
     # img_shape = tf.shape(img)
-    img_left = tf.image.crop_to_bounding_box(img, 0, 0, height, width)
-    img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - height, ORI_SIZE[1] - width, height, width)
+    img_left = tf.image.crop_to_bounding_box(img, 0, 0, IMG_H, IMG_W)
+    img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - IMG_H, ORI_SIZE[1] - IMG_W, IMG_H, IMG_W)
     if tf.reduce_mean(img_left) > tf.reduce_mean(img_right):
         return img_left
     return img_right
@@ -338,7 +338,7 @@ def extraction(image, label):
     img = tf.io.decode_png(img, channels=IMG_C)
     # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, True)
-    img = crop_left_and_right_select_one(prep_stage)
+    img = crop_left_and_right_select_one(img)
     img = post_stage(img)
 
     return img, label
