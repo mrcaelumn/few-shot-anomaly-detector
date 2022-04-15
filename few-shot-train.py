@@ -8,11 +8,12 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 import tensorflow_io as tfio
 import tensorflow_addons as tfa
-import itertoo
+import itertools
 
 import os
 from tqdm import tqdm
 import numpy as np
+import cv2
 import random
 
 from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score
@@ -27,6 +28,7 @@ import matplotlib.patches as mpatches
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
+ORI_SIZE = (271, 481)
 IMG_H = 256
 IMG_W = 256
 IMG_C = 3  ## Change this to 1 for grayscale.
@@ -55,9 +57,9 @@ train_shots = 20
 shots = 20
 classes = 1
 
-dataset_name = "numbers"
-eval_dataset_name = "numbers"
-test_dataset_name = "numbers"
+dataset_name = "mura"
+eval_dataset_name = "mura"
+test_dataset_name = "mura"
 
 mode_colour = str(IMG_H) + "_rgb"
 if IMG_C == 1:
@@ -246,15 +248,31 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.show()
     plt.clf()
     
-def enhance_image(image, beta=0.4):
+
+
+def enhance_image(image, beta=0.1):
     image = tf.cast(image, tf.float64)
     image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
     return image
 
+def crop_left_and_right(img, width=256, height=256):
+    # img_shape = tf.shape(img)
+    img_left = tf.image.crop_to_bounding_box(img, 0, 0, height, width)
+    img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - height, ORI_SIZE[1] - width, height, width)
+    
+    return img_left, img_right
+
+def crop_left_and_right_select_one(img, width=256, height=256):
+    # img_shape = tf.shape(img)
+    img_left = tf.image.crop_to_bounding_box(img, 0, 0, height, width)
+    img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - height, ORI_SIZE[1] - width, height, width)
+    if tf.reduce_mean(img_left) > tf.reduce_mean(img_right):
+        return img_left
+    return img_right
+
 def custom_v3(img):
-    img = tf.image.adjust_hue(img, 1.)
     img = tf.image.adjust_gamma(img)
-    img = tfa.image.median_filter2d(img)
+    img = tfa.image.median_filter2d(img, 3)
     return img
 
 
@@ -282,6 +300,8 @@ def read_data_with_labels(filepath, class_names):
         n_samples = None
         if LIMIT_TEST_IMAGES != "MAX":
             n_samples = LIMIT_TEST_IMAGES
+            if len(path_list) <  LIMIT_TEST_IMAGES:
+                n_samples = len(path_list)
         path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
         image_list = image_list + path_list
         label_list = label_list + class_list
@@ -292,31 +312,36 @@ def read_data_with_labels(filepath, class_names):
 
 def prep_stage(x, train=True):
     beta_contrast = 0.2
+    
     if train:
         x = enhance_image(x, beta_contrast)
         # x = custom_v3(x)
-        x = tf.image.resize(x, (IMG_H, IMG_W))
-        # x = tf.image.random_crop(x, (IMG_H, IMG_W))
     else: 
         x = enhance_image(x, beta_contrast)
         # x = custom_v3(x)
-        x = tf.image.resize(x, (IMG_H, IMG_W))
-        # x = tf.image.random_crop(x, (IMG_H, IMG_W))
-        
+    return x
+
+def post_stage(x):
+    
+    x = tf.image.resize(x, (IMG_H, IMG_W))
+    # x = tf.image.random_crop(x, (IMG_H, IMG_W))
+    # normalize to the range -1,1
+    x = tf.cast(x, tf.float32)
+    x = (x - 127.5) / 127.5
+    # normalize to the range 0-1
+    # img /= 255.0
     return x
 
 def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
+    # img = cv2.imread(image)
     img = tf.io.decode_png(img, channels=IMG_C)
     # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, True)
-    img = tf.cast(img, tf.float32)
-    # normalize to the range -1,1
-    img = (img - 127.5) / 127.5
-    # normalize to the range 0-1
-    # img /= 255.0
+    img = crop_left_and_right_select_one(prep_stage)
+    img = post_stage(img)
 
     return img, label
 
@@ -327,13 +352,12 @@ def extraction_test(image, label):
     img = tf.io.decode_png(img, channels=IMG_C)
     # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, False)
-    img = tf.cast(img, tf.float32)
-    # normalize to the range -1,1
-    img = (img - 127.5) / 127.5
-    # normalize to the range 0-1
-    # img /= 255.0
+    l_img, r_img = crop_left_and_right(img)
+    
+    l_img = post_stage(l_img)
+    r_img = post_stage(r_img)
 
-    return img, label
+    return l_img, r_img, label
 
 
 # In[ ]:
@@ -621,10 +645,11 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     feat_loss_list = []
     ssim_loss_list = []
     
-    for images, labels in test_ds:
+    for left_images, right_images, labels in test_ds:
         
-        score = calculate_a_score(g_model_inner, d_model_inner, images)
-        
+        l_score = calculate_a_score(g_model_inner, d_model_inner, left_images)
+        r_score = calculate_a_score(g_model_inner, d_model_inner, right_images)
+        scores_ano = np.max(l_score.numpy(), r_score.numpy())
         scores_ano = np.append(scores_ano, score.numpy())
         real_label = np.append(real_label, labels.numpy()[0])
         
@@ -826,9 +851,12 @@ if TRAIN:
             scores_ano = []
             real_label = []
             
-            for images, labels in eval_ds:
-                
-                score = calculate_a_score(eval_g_model, eval_d_model, images)
+           
+            for left_images, right_images, labels in eval_ds:
+
+                l_score = calculate_a_score(g_model_inner, d_model_inner, left_images)
+                r_score = calculate_a_score(g_model_inner, d_model_inner, right_images)
+                scores_ano = np.max(l_score.numpy(), r_score.numpy())
                 
                 scores_ano = np.append(scores_ano, score.numpy())
                 real_label = np.append(real_label, labels.numpy()[0])
