@@ -13,7 +13,6 @@ import itertools
 import os
 from tqdm import tqdm
 import numpy as np
-import cv2
 import random
 
 from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score
@@ -336,7 +335,6 @@ def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
     img = tf.io.read_file(image)
-    # img = cv2.imread(image)
     img = tf.io.decode_png(img, channels=IMG_C)
     # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, True)
