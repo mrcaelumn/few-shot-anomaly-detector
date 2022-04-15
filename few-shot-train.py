@@ -535,7 +535,7 @@ def calculate_a_score(out_g_model, out_d_model, images):
     loss_feat = multimse(feature_real, feature_fake)
     # print("loss_rec:", loss_rec, "loss_feat:", loss_feat)
     score = (anomaly_weight * loss_rec) + ((1-anomaly_weight) * loss_feat)
-    return score
+    return score, loss_rec, loss_feat
 
 
 # In[ ]:
@@ -644,12 +644,20 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     ssim_loss_list = []
     
     for left_images, right_images, labels in test_ds:
+        loss_rec, loss_feat = 0.0
+        l_score, l_rec_loss, l_feat_loss = calculate_a_score(g_model_inner, d_model_inner, left_images)
+        r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, right_images)
         
-        l_score = calculate_a_score(g_model_inner, d_model_inner, left_images)
-        r_score = calculate_a_score(g_model_inner, d_model_inner, right_images)
-        scores_ano = np.max(l_score.numpy(), r_score.numpy())
-        scores_ano = np.append(scores_ano, score.numpy())
+        score = max(l_score.numpy(), r_score.numpy())
+        scores_ano = np.append(scores_ano, score)
         real_label = np.append(real_label, labels.numpy()[0])
+        
+        loss_rec = r_rec_loss
+        loss_feat = r_feat_loss
+        
+        if score == l_score.numpy():
+            loss_rec = l_rec_loss
+            loss_feat = l_feat_loss
         
         rec_loss_list = np.append(rec_loss_list, loss_rec)
         feat_loss_list = np.append(feat_loss_list, loss_feat)
@@ -852,10 +860,21 @@ if TRAIN:
            
             for left_images, right_images, labels in eval_ds:
 
-                l_score = calculate_a_score(eval_g_model, eval_d_model, left_images)
-                r_score = calculate_a_score(eval_g_model, eval_d_model, right_images)
-                scores_ano = np.max(l_score.numpy(), r_score.numpy())
-                
+                loss_rec, loss_feat = 0.0
+                l_score, l_rec_loss, l_feat_loss = calculate_a_score(eval_g_model, eval_d_model, left_images)
+                r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, right_images)
+
+                score = max(l_score.numpy(), r_score.numpy())
+                scores_ano = np.append(scores_ano, score)
+                real_label = np.append(real_label, labels.numpy()[0])
+
+                loss_rec = r_rec_loss
+                loss_feat = r_feat_loss
+
+                if score == l_score.numpy():
+                    loss_rec = l_rec_loss
+                    loss_feat = l_feat_loss
+                    
                 scores_ano = np.append(scores_ano, score.numpy())
                 real_label = np.append(real_label, labels.numpy()[0])
             
