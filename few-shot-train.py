@@ -852,8 +852,8 @@ if TRAIN:
            
             for left_images, right_images, labels in eval_ds:
 
-                l_score = calculate_a_score(g_model_inner, d_model_inner, left_images)
-                r_score = calculate_a_score(g_model_inner, d_model_inner, right_images)
+                l_score = calculate_a_score(eval_g_model, eval_d_model, left_images)
+                r_score = calculate_a_score(eval_g_model, eval_d_model, right_images)
                 scores_ano = np.max(l_score.numpy(), r_score.numpy())
                 
                 scores_ano = np.append(scores_ano, score.numpy())
