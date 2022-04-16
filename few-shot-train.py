@@ -659,8 +659,6 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         scores_ano = np.append(scores_ano, score)
         real_label = np.append(real_label, labels.numpy()[0])
         
-        
-        
         rec_loss_list = np.append(rec_loss_list, loss_rec)
         feat_loss_list = np.append(feat_loss_list, loss_feat)
         
@@ -875,11 +873,6 @@ if TRAIN:
                     loss_feat = l_feat_loss
                     
                 scores_ano = np.append(scores_ano, score)
-                real_label = np.append(real_label, labels.numpy()[0])
-
-                
-                    
-                scores_ano = np.append(scores_ano, score.numpy())
                 real_label = np.append(real_label, labels.numpy()[0])
             
             # print("scores_ano:", scores_ano)
