@@ -354,7 +354,7 @@ def extraction_test(image, label):
     
     l_img = post_stage(l_img)
     r_img = post_stage(r_img)
-
+    # img = post_stage(img)
     return l_img, r_img, label
     # return img, label
 
