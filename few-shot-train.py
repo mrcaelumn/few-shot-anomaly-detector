@@ -28,8 +28,8 @@ import matplotlib.patches as mpatches
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 ORI_SIZE = (271, 481)
-IMG_H = 256
-IMG_W = 256
+IMG_H = 128
+IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.
 
 # Weight initializers for the Generator network
@@ -356,6 +356,7 @@ def extraction_test(image, label):
     r_img = post_stage(r_img)
 
     return l_img, r_img, label
+    # return img, label
 
 
 # In[ ]:
@@ -604,7 +605,7 @@ def build_generator_resnet50_unet(inputs):
 
 # create discriminator model
 def build_discriminator(inputs):
-    num_layers = 5
+    num_layers = 4
     f = [2**i for i in range(num_layers)]
     x = inputs
     features = []
@@ -647,9 +648,12 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     ssim_loss_list = []
     
     for left_images, right_images, labels in test_ds:
+    # for images, labels in test_ds:
         loss_rec, loss_feat = 0.0, 0.0
         l_score, l_rec_loss, l_feat_loss = calculate_a_score(g_model_inner, d_model_inner, left_images)
         r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, right_images)
+        
+        # r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, images)
         
         score = max(l_score.numpy(), r_score.numpy())
         loss_rec = r_rec_loss
@@ -862,10 +866,13 @@ if TRAIN:
             
            
             for left_images, right_images, labels in eval_ds:
+            # for images, labels in eval_ds:
 
                 loss_rec, loss_feat = 0.0, 0.0
                 l_score, l_rec_loss, l_feat_loss = calculate_a_score(eval_g_model, eval_d_model, left_images)
                 r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, right_images)
+                
+                # r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, images)
 
                 score = max(l_score.numpy(), r_score.numpy())
                 loss_rec = r_rec_loss
@@ -879,7 +886,7 @@ if TRAIN:
                 real_label = np.append(real_label, labels.numpy()[0])
             
             # print("scores_ano:", scores_ano)
-            ''' Scale scores vector between [0, 1]'''
+            '''Scale scores vector between [0, 1]'''
             scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
             # print("real_label:", real_label)
             # print("scores_ano:", scores_ano)
