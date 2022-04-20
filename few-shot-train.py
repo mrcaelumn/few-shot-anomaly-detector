@@ -525,7 +525,7 @@ eval_ds = eval_dataset.get_dataset(1)
 
 def calculate_a_score(out_g_model, out_d_model, images):
     reconstructed_images = out_g_model(images, training=False)
-    # images = grayscale_converter(images)
+
     feature_real, label_real  = out_d_model(images, training=False)
     # print(generated_images.shape)
     feature_fake, label_fake = out_d_model(reconstructed_images, training=False)
@@ -658,7 +658,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         score = max(l_score.numpy(), r_score.numpy())
         loss_rec = r_rec_loss
         loss_feat = r_feat_loss
-        
+        # score = r_score.numpy()
         if score == l_score.numpy():
             loss_rec = l_rec_loss
             loss_feat = l_feat_loss
@@ -877,7 +877,7 @@ if TRAIN:
                 score = max(l_score.numpy(), r_score.numpy())
                 loss_rec = r_rec_loss
                 loss_feat = r_feat_loss
-
+                # score = r_score.numpy()
                 if score == l_score.numpy():
                     loss_rec = l_rec_loss
                     loss_feat = l_feat_loss
