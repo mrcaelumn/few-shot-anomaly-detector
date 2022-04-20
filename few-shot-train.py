@@ -265,7 +265,7 @@ def crop_left_and_right_select_one(img):
     # img_shape = tf.shape(img)
     img_left = tf.image.crop_to_bounding_box(img, 0, 0, IMG_H, IMG_W)
     img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - IMG_H, ORI_SIZE[1] - IMG_W, IMG_H, IMG_W)
-    if tf.reduce_mean(img_left) > tf.reduce_mean(img_right):
+    if tf.math.reduce_std(img_left) <  tf.math.reduce_std(img_right):
         return img_left
     return img_right
 
@@ -568,28 +568,31 @@ def build_generator_resnet50_unet(inputs):
     # print("pretained start")
     """ Pre-trained ResNet50 Model """
     resnet50 = tf.keras.applications.ResNet50(include_top=True, weights="imagenet", input_tensor=inputs)
-
+    
     """ Encoder """
-    s1 = resnet50.get_layer("input_1").output           ## (256 x 256)
-    s2 = resnet50.get_layer("conv1_relu").output        ## (128 x 128)
-    s3 = resnet50.get_layer("conv2_block3_out").output  ## (64 x 64)
-    s4 = resnet50.get_layer("conv3_block4_out").output  ## (32 x 32)
+    s1 = resnet50.get_layer("input_1").output           ## (512 x 512)
+    s2 = resnet50.get_layer("conv1_relu").output        ## (256 x 256)
+    s3 = resnet50.get_layer("conv2_block3_out").output  ## (128 x 128)
+    s4 = resnet50.get_layer("conv3_block4_out").output  ## (64 x 64)
+    s5 = resnet50.get_layer("conv4_block6_out").output  ## (32 x 32)
 
     """ Bridge """
-    b1 = resnet50.get_layer("conv4_block6_out").output  ## (16 x 16)
+    b1 = resnet50.get_layer("conv5_block3_out").output  ## (16 x 16)
 
     """ Decoder """
     x = IMG_H
-    d1 = decoder_block(b1, s4, x)                     ## (32 x 32)
+    d1 = decoder_block(b1, s5, x)                     ## (32 x 32)
     x = x/2
-    d2 = decoder_block(d1, s3, x)                     ## (64 x 64)
+    d2 = decoder_block(d1, s4, x)                     ## (64 x 64)
     x = x/2
-    d3 = decoder_block(d2, s2, x)                     ## (128 x 128)
+    d3 = decoder_block(d2, s3, x)                     ## (128 x 128)
     x = x/2
-    d4 = decoder_block(d3, s1, x)                      ## (256 x 256)
+    d4 = decoder_block(d3, s2, x)                      ## (256 x 256)
+    x = x/2
+    d5 = decoder_block(d4, s1, x)                      ## (512 x 512)
     
     """ Output """
-    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d5)
 
     model = tf.keras.models.Model(inputs, outputs)
 
