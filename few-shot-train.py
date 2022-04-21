@@ -269,7 +269,31 @@ def crop_left_and_right_select_one(img):
         return img_left
     return img_right
 
-def sliding_crop_and_select_one(img, stepSize=64, windowSize=(128, 128), testing=False):
+def sliding_crop_and_select_one(img, stepSize=64, windowSize=(128, 128)):
+    current_std = 0
+    current_image = None
+    
+    for y in range(0, ORI_SIZE[0], stepSize):
+        for x in range(0, ORI_SIZE[1], stepSize):
+            crop_y = y
+            if (y + windowSize[0]) > ORI_SIZE[0]:
+                crop_y =  ORI_SIZE[0] - windowSize[0]
+            
+            crop_x = x
+            if (x + windowSize[1]) > ORI_SIZE[1]:
+                crop_x = ORI_SIZE[1] - windowSize[1]
+            
+            # print(crop_y, crop_x, windowSize)
+            image = tf.image.crop_to_bounding_box(img, crop_y, crop_x, windowSize[0], windowSize[1])                
+            std_image = tf.math.reduce_std(tf.cast(image, dtype=tf.float32))
+          
+            if std_image < current_std or current_std == 0:
+                current_std = std_image
+                current_image = image
+                
+    return current_image
+
+def sliding_crop(img, stepSize=64, windowSize=(128, 128)):
     current_std = 0
     current_image = []
     
@@ -285,15 +309,7 @@ def sliding_crop_and_select_one(img, stepSize=64, windowSize=(128, 128), testing
             
             # print(crop_y, crop_x, windowSize)
             image = tf.image.crop_to_bounding_box(img, crop_y, crop_x, windowSize[0], windowSize[1])
-            if testing:
-                current_image.append(image)
-                continue
-                
-            std_image = tf.math.reduce_std(tf.cast(image, dtype=tf.float32))
-          
-            if std_image < current_std or current_std == 0:
-                current_std = std_image
-                current_image = image
+            current_image.append(image)
                 
     return current_image
 
@@ -383,7 +399,7 @@ def extraction_test(image, label):
     l_img = post_stage(l_img)
     r_img = post_stage(r_img)
     
-    # img_list = sliding_crop_and_select_one(img, testing=True)
+    # img_list = sliding_crop(img)
     # img = [post_stage(a) for a in img_list]
     
     # img = post_stage(img)
