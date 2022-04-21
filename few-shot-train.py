@@ -936,8 +936,8 @@ if TRAIN:
 
 
                 '''for left & right'''
-                l_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, left_images)
-                r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, right_images)
+                l_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, left_images)
+                r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, right_images)
                 score = max(l_score.numpy(), r_score.numpy())
                 if score == r_score.numpy():
                     loss_rec = r_rec_loss
@@ -945,13 +945,13 @@ if TRAIN:
 
 
                 '''for normal'''
-                # temp_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, images)
+                # temp_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, images)
                 # score = temp_score.numpy()
 
 
                 '''for sliding images'''
                 # for image in images:
-                #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, images)
+                #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, images)
                 #     if r_score.numpy() > score or score == 0:
                 #         score = r_score.numpy()
                 #         loss_rec = r_rec_loss
