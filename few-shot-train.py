@@ -293,7 +293,7 @@ def sliding_crop_and_select_one(img, stepSize=stSize, windowSize=winSize):
             image = tf.image.crop_to_bounding_box(img, crop_y, crop_x, windowSize[0], windowSize[1])                
             std_image = tf.math.reduce_std(tf.cast(image, dtype=tf.float32))
           
-            if std_image < current_std or current_std == 0:
+            if current_std == 0 or std_image < current_std :
                 current_std = std_image
                 current_image = image
                 
