@@ -399,8 +399,8 @@ def extraction(image, label):
     img = tf.io.decode_png(img, channels=IMG_C)
     # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, True)
-    img = crop_left_and_right_select_one(img)
-    # img = sliding_crop_and_select_one(img)
+    # img = crop_left_and_right_select_one(img)
+    img = sliding_crop_and_select_one(img)
     img = post_stage(img)
 
     return img, label
@@ -415,16 +415,16 @@ def extraction_test(image, label):
     # img = post_stage(img)
     
     
-    l_img, r_img = crop_left_and_right(img)
-    l_img = post_stage(l_img)
-    r_img = post_stage(r_img)
+    # l_img, r_img = crop_left_and_right(img)
+    # l_img = post_stage(l_img)
+    # r_img = post_stage(r_img)
     
-    # img_list = sliding_crop(img)
-    # img = [post_stage(a) for a in img_list]
+    img_list = sliding_crop(img)
+    img = [post_stage(a) for a in img_list]
     
     
-    return l_img, r_img, label
-    # return img, label
+    # return l_img, r_img, label
+    return img, label
 
 
 # In[ ]:
@@ -717,19 +717,19 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     feat_loss_list = []
     ssim_loss_list = []
     
-    for left_images, right_images, labels in test_ds:
-    # for images, labels in test_ds:
+    # for left_images, right_images, labels in test_ds:
+    for images, labels in test_ds:
         loss_rec, loss_feat = 0.0, 0.0
         score = 0
 
         
         '''for left & right'''
-        l_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, left_images)
-        r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, right_images)
-        score = max(l_score.numpy(), r_score.numpy())
-        if score == r_score.numpy():
-            loss_rec = r_rec_loss
-            loss_feat = r_feat_loss
+        # l_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, left_images)
+        # r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, right_images)
+        # score = max(l_score.numpy(), r_score.numpy())
+        # if score == r_score.numpy():
+        #     loss_rec = r_rec_loss
+        #     loss_feat = r_feat_loss
         
         
         '''for normal'''
@@ -738,12 +738,12 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         
         
         '''for sliding images'''
-        # for image in images:
-        #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, image)
-        #     if r_score.numpy() > score or score == 0:
-        #         score = r_score.numpy()
-        #         loss_rec = r_rec_loss
-        #         loss_feat = r_feat_loss
+        for image in images:
+            r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, image)
+            if r_score.numpy() > score or score == 0:
+                score = r_score.numpy()
+                loss_rec = r_rec_loss
+                loss_feat = r_feat_loss
                 
             
         scores_ano = np.append(scores_ano, score)
@@ -948,20 +948,20 @@ if TRAIN:
             real_label = []
             
            
-            for left_images, right_images, labels in eval_ds:
-            # for images, labels in eval_ds:
+            # for left_images, right_images, labels in eval_ds:
+            for images, labels in eval_ds:
 
                 loss_rec, loss_feat = 0.0, 0.0
                 score = 0
 
 
                 '''for left & right'''
-                l_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, left_images)
-                r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, right_images)
-                score = max(l_score.numpy(), r_score.numpy())
-                if score == r_score.numpy():
-                    loss_rec = r_rec_loss
-                    loss_feat = r_feat_loss
+                # l_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, left_images)
+                # r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, right_images)
+                # score = max(l_score.numpy(), r_score.numpy())
+                # if score == r_score.numpy():
+                #     loss_rec = r_rec_loss
+                #     loss_feat = r_feat_loss
 
 
                 '''for normal'''
@@ -970,12 +970,12 @@ if TRAIN:
 
 
                 '''for sliding images'''
-                # for image in images:
-                #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
-                #     if r_score.numpy() > score or score == 0:
-                #         score = r_score.numpy()
-                #         loss_rec = r_rec_loss
-                #         loss_feat = r_feat_loss
+                for image in images:
+                    r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
+                    if r_score.numpy() > score or score == 0:
+                        score = r_score.numpy()
+                        loss_rec = r_rec_loss
+                        loss_feat = r_feat_loss
                     
                 scores_ano = np.append(scores_ano, score)
                 real_label = np.append(real_label, labels.numpy()[0])
