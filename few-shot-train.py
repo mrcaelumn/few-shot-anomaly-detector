@@ -32,6 +32,7 @@ IMG_H = 128
 IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.
 winSize = (256, 256)
+stSize = 20
 # Weight initializers for the Generator network
 # WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 AUTOTUNE = tf.data.AUTOTUNE
@@ -267,21 +268,28 @@ def crop_left_and_right_select_one(img):
         return img_left
     return img_right
 
-def sliding_crop_and_select_one(img, stepSize=64, windowSize=winSize):
+def sliding_crop_and_select_one(img, stepSize=stSize, windowSize=winSize):
     current_std = 0
     current_image = None
-    
+    y_end_crop, x_end_crop = False, False
     for y in range(0, ORI_SIZE[0], stepSize):
+        
+        y_end_crop = False
+        
         for x in range(0, ORI_SIZE[1], stepSize):
+            
+            x_end_crop = False
+            
             crop_y = y
             if (y + windowSize[0]) > ORI_SIZE[0]:
                 crop_y =  ORI_SIZE[0] - windowSize[0]
+                y_end_crop = True
             
             crop_x = x
             if (x + windowSize[1]) > ORI_SIZE[1]:
                 crop_x = ORI_SIZE[1] - windowSize[1]
-            
-            # print(crop_y, crop_x, windowSize)
+                x_end_crop = True
+                
             image = tf.image.crop_to_bounding_box(img, crop_y, crop_x, windowSize[0], windowSize[1])                
             std_image = tf.math.reduce_std(tf.cast(image, dtype=tf.float32))
           
@@ -289,14 +297,22 @@ def sliding_crop_and_select_one(img, stepSize=64, windowSize=winSize):
                 current_std = std_image
                 current_image = image
                 
+            if x_end_crop:
+                break
+                
+        if x_end_crop and y_end_crop:
+            break
+            
     return current_image
 
-def sliding_crop(img, stepSize=64, windowSize=winSize):
+def sliding_crop(img, stepSize=stSize, windowSize=winSize):
     current_std = 0
     current_image = []
-    
+    y_end_crop, x_end_crop = False, False
     for y in range(0, ORI_SIZE[0], stepSize):
+        y_end_crop = False
         for x in range(0, ORI_SIZE[1], stepSize):
+            x_end_crop = False
             crop_y = y
             if (y + windowSize[0]) > ORI_SIZE[0]:
                 crop_y =  ORI_SIZE[0] - windowSize[0]
@@ -308,7 +324,10 @@ def sliding_crop(img, stepSize=64, windowSize=winSize):
             # print(crop_y, crop_x, windowSize)
             image = tf.image.crop_to_bounding_box(img, crop_y, crop_x, windowSize[0], windowSize[1])
             current_image.append(image)
-                
+            if x_end_crop:
+                break
+        if x_end_crop and y_end_crop:
+            break
     return current_image
 
 def custom_v3(img):
