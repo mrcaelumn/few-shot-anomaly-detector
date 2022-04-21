@@ -31,7 +31,7 @@ ORI_SIZE = (271, 481)
 IMG_H = 128
 IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.
-
+winSize = (256, 256)
 # Weight initializers for the Generator network
 # WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 AUTOTUNE = tf.data.AUTOTUNE
@@ -247,8 +247,6 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.show()
     plt.clf()
     
-
-
 def enhance_image(image, beta=0.1):
     image = tf.cast(image, tf.float64)
     image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
@@ -269,7 +267,7 @@ def crop_left_and_right_select_one(img):
         return img_left
     return img_right
 
-def sliding_crop_and_select_one(img, stepSize=64, windowSize=(128, 128)):
+def sliding_crop_and_select_one(img, stepSize=64, windowSize=winSize):
     current_std = 0
     current_image = None
     
@@ -293,7 +291,7 @@ def sliding_crop_and_select_one(img, stepSize=64, windowSize=(128, 128)):
                 
     return current_image
 
-def sliding_crop(img, stepSize=64, windowSize=(128, 128)):
+def sliding_crop(img, stepSize=64, windowSize=winSize):
     current_std = 0
     current_image = []
     
