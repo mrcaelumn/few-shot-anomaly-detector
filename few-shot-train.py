@@ -606,6 +606,8 @@ def build_generator_resnet50_unet(inputs):
 # create discriminator model
 def build_discriminator(inputs):
     num_layers = 4
+    if IMG_H > 128:
+        num_layers = 5
     f = [2**i for i in range(num_layers)]
     x = inputs
     features = []
@@ -624,7 +626,7 @@ def build_discriminator(inputs):
            
     x = tf.keras.layers.Flatten()(x)
     features.append(x)
-    output = tf.keras.layers.Dense(1, activation="tanh")(x)
+    output = tf.keras.layers.Dense(1, activation="softmax")(x)
 
     model = tf.keras.models.Model(inputs, outputs = [features, output])
     
