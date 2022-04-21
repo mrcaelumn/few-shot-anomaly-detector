@@ -44,14 +44,14 @@ LIMIT_TEST_IMAGES = 100
 # range between 0-1
 anomaly_weight = 0.7
 learning_rate = 0.002
-meta_step_size = 0.25
+meta_step_size = 0.50
 
 inner_batch_size = 25
 eval_batch_size = 25
 
 meta_iters = 2000
 eval_iters = 1
-inner_iters = 5
+inner_iters = 4
 
 train_shots = 20
 shots = 20
@@ -339,7 +339,7 @@ def custom_v3(img):
 # In[ ]:
 
 
-def read_data_with_labels(filepath, class_names):
+def read_data_with_labels(filepath, class_names, training):
    
     image_list = []
     label_list = []
@@ -358,11 +358,18 @@ def read_data_with_labels(filepath, class_names):
                 # image_label_list.append({filpath:class_num})
         
         n_samples = None
-        if LIMIT_TEST_IMAGES != "MAX":
-            n_samples = LIMIT_TEST_IMAGES
-            if len(path_list) <  LIMIT_TEST_IMAGES:
+        if training:
+            n_samples = shots
+            if len(path_list) <  shots:
                 n_samples = len(path_list)
+        else:
+            if LIMIT_TEST_IMAGES != "MAX":
+                n_samples = LIMIT_TEST_IMAGES
+                if len(path_list) <  LIMIT_TEST_IMAGES:
+                    n_samples = len(path_list)
+                    
         path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
+        
         image_list = image_list + path_list
         label_list = label_list + class_list
   
@@ -493,7 +500,7 @@ class Dataset:
         self.data = {}
         
         class_names = ["normal"] if training else ["normal", "defect"]
-        filenames, labels = read_data_with_labels(path_file, class_names)
+        filenames, labels = read_data_with_labels(path_file, class_names, training)
         
         ds = tf.data.Dataset.from_tensor_slices((filenames, labels))
         self.ds = ds.shuffle(buffer_size=1024, seed=random.randint(123, 10000) )
