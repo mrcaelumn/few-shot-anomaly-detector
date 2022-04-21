@@ -719,7 +719,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         
         '''for sliding images'''
         # for image in images:
-        #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, images)
+        #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, image)
         #     if r_score.numpy() > score or score == 0:
         #         score = r_score.numpy()
         #         loss_rec = r_rec_loss
@@ -951,7 +951,7 @@ if TRAIN:
 
                 '''for sliding images'''
                 # for image in images:
-                #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, images)
+                #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
                 #     if r_score.numpy() > score or score == 0:
                 #         score = r_score.numpy()
                 #         loss_rec = r_rec_loss
