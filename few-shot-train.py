@@ -383,7 +383,7 @@ def extraction(image, label):
     # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, True)
     img = crop_left_and_right_select_one(img)
-    # img = sliding_crop_and_select_one(img, testing=False)
+    # img = sliding_crop_and_select_one(img)
     img = post_stage(img)
 
     return img, label
@@ -395,6 +395,9 @@ def extraction_test(image, label):
     img = tf.io.decode_png(img, channels=IMG_C)
     # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, False)
+    # img = post_stage(img)
+    
+    
     l_img, r_img = crop_left_and_right(img)
     l_img = post_stage(l_img)
     r_img = post_stage(r_img)
@@ -402,7 +405,7 @@ def extraction_test(image, label):
     # img_list = sliding_crop(img)
     # img = [post_stage(a) for a in img_list]
     
-    # img = post_stage(img)
+    
     return l_img, r_img, label
     # return img, label
 
