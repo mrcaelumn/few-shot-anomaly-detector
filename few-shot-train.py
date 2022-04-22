@@ -258,7 +258,7 @@ def crop_left_and_right(img):
     img_left = tf.image.crop_to_bounding_box(img, 0, 0, IMG_H, IMG_W)
     img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - IMG_H, ORI_SIZE[1] - IMG_W, IMG_H, IMG_W)
     
-    return img_left, img_right
+    return [img_left, img_right]
 
 def crop_left_and_right_select_one(img):
     # img_shape = tf.shape(img)
@@ -422,15 +422,11 @@ def extraction_test(image, label):
     # img = post_stage(img)
     
     
-    # l_img, r_img = crop_left_and_right(img)
-    # l_img = post_stage(l_img)
-    # r_img = post_stage(r_img)
-    
+    # img_list = crop_left_and_right(img)
     img_list = sliding_crop(img)
+    
     img = [post_stage(a) for a in img_list]
-    
-    
-    # return l_img, r_img, label
+
     return img, label
 
 
@@ -618,11 +614,11 @@ def calculate_a_score(out_g_model, out_d_model, images):
 
 
 def conv_block(input, num_filters):
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(4,4), padding="same")(input)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(2,2), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
 
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(4,4), padding="same")(x)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(2,2), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
 
@@ -688,11 +684,13 @@ def build_discriminator(inputs):
     features = []
     for i in range(0, num_layers):
         if i == 0:
-            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (2, 2), strides=(2, 2), padding='same')(x)
+            # x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (2, 2), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
         
         else:
-            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (2, 2), strides=(2, 2), padding='same')(x)
+            # x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (2, 2), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
         # x = tf.keras.layers.Dropout(0.3)(x)
@@ -724,19 +722,9 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     feat_loss_list = []
     ssim_loss_list = []
     
-    # for left_images, right_images, labels in test_ds:
     for images, labels in test_ds:
         loss_rec, loss_feat = 0.0, 0.0
         score = 0
-
-        
-        '''for left & right'''
-        # l_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, left_images)
-        # r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, right_images)
-        # score = max(l_score.numpy(), r_score.numpy())
-        # if score == r_score.numpy():
-        #     loss_rec = r_rec_loss
-        #     loss_feat = r_feat_loss
         
         
         '''for normal'''
@@ -744,7 +732,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         # score = temp_score.numpy()
         
         
-        '''for sliding images'''
+        '''for sliding images & Crop LR'''
         for image in images:
             r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, image)
             if r_score.numpy() > score or score == 0:
@@ -955,20 +943,10 @@ if TRAIN:
             real_label = []
             
            
-            # for left_images, right_images, labels in eval_ds:
             for images, labels in eval_ds:
 
                 loss_rec, loss_feat = 0.0, 0.0
                 score = 0
-
-
-                '''for left & right'''
-                # l_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, left_images)
-                # r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, right_images)
-                # score = max(l_score.numpy(), r_score.numpy())
-                # if score == r_score.numpy():
-                #     loss_rec = r_rec_loss
-                #     loss_feat = r_feat_loss
 
 
                 '''for normal'''
@@ -976,7 +954,7 @@ if TRAIN:
                 # score = temp_score.numpy()
 
 
-                '''for sliding images'''
+                '''for Sliding Images & LR Crop'''
                 for image in images:
                     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
                     if r_score.numpy() > score or score == 0:
