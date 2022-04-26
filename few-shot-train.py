@@ -41,6 +41,8 @@ TRAIN = True
 
 LIMIT_TEST_IMAGES = 100
 
+LIMIT_TRAIN_IMAGES = "MAX"
+
 # range between 0-1
 anomaly_weight = 0.7
 learning_rate = 0.002
@@ -53,7 +55,7 @@ meta_iters = 2000
 eval_iters = 1
 inner_iters = 4
 
-train_shots = 20
+train_shots = 40
 shots = 20
 classes = 1
 
@@ -359,9 +361,10 @@ def read_data_with_labels(filepath, class_names, training):
         
         n_samples = None
         if training:
-            n_samples = shots
-            if len(path_list) <  shots:
-                n_samples = len(path_list)
+            if LIMIT_TRAIN_IMAGES != "MAX":
+                n_samples = shots
+                if len(path_list) <  shots:
+                    n_samples = len(path_list)
         else:
             if LIMIT_TEST_IMAGES != "MAX":
                 n_samples = LIMIT_TEST_IMAGES
@@ -381,17 +384,19 @@ def prep_stage(x, train=True):
     beta_contrast = 0.1
     
     if train:
-        x = enhance_image(x, beta_contrast)
+        # x = enhance_image(x, beta_contrast)
+        x = tfa.image.equalize(x)
         # x = custom_v3(x)
     else: 
-        x = enhance_image(x, beta_contrast)
+        # x = enhance_image(x, beta_contrast)
+        x = tfa.image.equalize(x)
         # x = custom_v3(x)
     return x
 
 def post_stage(x):
     
     x = tf.image.resize(x, (IMG_H, IMG_W))
-    # x = tf.image.random_crop(x, (IMG_H, IMG_W))
+    # x = tf.image.resize_with_crop_or_pad(x, IMG_H, IMG_W)
     # normalize to the range -1,1
     x = tf.cast(x, tf.float32)
     x = (x - 127.5) / 127.5
@@ -613,21 +618,18 @@ def calculate_a_score(out_g_model, out_d_model, images):
 # In[ ]:
 
 
-def conv_block(input, num_filters):
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(2,2), padding="same")(input)
-    x = tf.keras.layers.BatchNormalization()(x)
+def conv_block(input, num_filters, bn=True):
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
+    if bn:
+        x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
-
-    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(2,2), padding="same")(x)
-    x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.LeakyReLU()(x)
-
     return x
 
-def decoder_block(input, skip_features, num_filters):
+def decoder_block(input, skip_features, num_filters, bn=True):
     x = tf.keras.layers.Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(input)
     x = tf.keras.layers.Concatenate()([x, skip_features])
-    x = conv_block(x, num_filters)
+    x = conv_block(x, num_filters, bn)
+    # x = conv_block(x, num_filters, bn)
     return x
 
 
@@ -684,13 +686,14 @@ def build_discriminator(inputs):
     features = []
     for i in range(0, num_layers):
         if i == 0:
-            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (2, 2), strides=(2, 2), padding='same')(x)
-            # x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (2, 2), strides=(2, 2), padding='same')(x)
-            x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
+            # x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.LeakyReLU(0.2)(x)
         
         else:
-            x = tf.keras.layers.SeparableConv2D(f[i] * IMG_H ,kernel_size = (2, 2), strides=(2, 2), padding='same')(x)
-            # x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (2, 2), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
         # x = tf.keras.layers.Dropout(0.3)(x)
@@ -891,7 +894,7 @@ def train_step(real_images):
 
 if TRAIN:
     print("Start Trainning. ", name_model)
-    best_auc = 0.6
+    best_auc = 0.7
     for meta_iter in range(meta_iters):
         frac_done = meta_iter / meta_iters
         cur_meta_step_size = (1 - frac_done) * meta_step_size
@@ -975,12 +978,12 @@ if TRAIN:
             scores_ano = (scores_ano > threshold).astype(int)
             cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
             TP = cm[1][1]
-            # FP = cm[0][1]
-            # FN = cm[1][0]
+            FP = cm[0][1]
+            FN = cm[1][0]
             TN = cm[0][0]
             # print(cm)
             print(
-                f"model saved. batch {meta_iter}:, AUC={auc_out:.3f}, TP={TP}, TN={TN}, Gen Loss={gen_loss_out:.5f}, Disc Loss={disc_loss_out:.5f}" 
+                f"model saved. batch {meta_iter}:, AUC={auc_out:.3f}, TP={TP}, TN={TN}, FP={FP}, FN={FN}, Gen Loss={gen_loss_out:.5f}, Disc Loss={disc_loss_out:.5f}" 
             )
             
             if auc_out >= best_auc:
