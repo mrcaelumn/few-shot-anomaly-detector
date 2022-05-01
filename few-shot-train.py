@@ -39,14 +39,14 @@ AUTOTUNE = tf.data.AUTOTUNE
 
 TRAIN = True
 
-LIMIT_TEST_IMAGES = 100
-
+LIMIT_EVAL_IMAGES = 100
+LIMIT_TEST_IMAGES = "MAX"
 LIMIT_TRAIN_IMAGES = "MAX"
 
 # range between 0-1
 anomaly_weight = 0.7
 learning_rate = 0.002
-meta_step_size = 0.50
+meta_step_size = 0.25
 
 inner_batch_size = 25
 eval_batch_size = 25
@@ -341,7 +341,7 @@ def custom_v3(img):
 # In[ ]:
 
 
-def read_data_with_labels(filepath, class_names, training):
+def read_data_with_labels(filepath, class_names, training, limit=100):
    
     image_list = []
     label_list = []
@@ -360,16 +360,11 @@ def read_data_with_labels(filepath, class_names, training):
                 # image_label_list.append({filpath:class_num})
         
         n_samples = None
-        if training:
-            if LIMIT_TRAIN_IMAGES != "MAX":
-                n_samples = shots
-                if len(path_list) <  shots:
-                    n_samples = len(path_list)
-        else:
-            if LIMIT_TEST_IMAGES != "MAX":
-                n_samples = LIMIT_TEST_IMAGES
-                if len(path_list) <  LIMIT_TEST_IMAGES:
-                    n_samples = len(path_list)
+        if limit != "MAX":
+            n_samples = shots
+            if len(path_list) <  shots:
+                n_samples = len(path_list)
+       
                     
         path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
         
@@ -495,13 +490,13 @@ class Dataset:
     # This class will facilitate the creation of a few-shot dataset
     # from the Omniglot dataset that can be sampled from quickly while also
     # allowing to create new labels at the same time.
-    def __init__(self, path_file, training=True):
+    def __init__(self, path_file, training=True, limit=100):
         # Download the tfrecord files containing the omniglot data and convert to a
         # dataset.
         self.data = {}
         
         class_names = ["normal"] if training else ["normal", "defect"]
-        filenames, labels = read_data_with_labels(path_file, class_names, training)
+        filenames, labels = read_data_with_labels(path_file, class_names, training, limit)
         
         ds = tf.data.Dataset.from_tensor_slices((filenames, labels))
         self.ds = ds.shuffle(buffer_size=1024, seed=random.randint(123, 10000) )
@@ -570,9 +565,9 @@ import urllib3
 urllib3.disable_warnings() # Disable SSL warnings that may happen during download.
 
 ## load dataset
-train_dataset = Dataset(train_data_path, training=True)
+train_dataset = Dataset(train_data_path, training=True, limit=LIMIT_TRAIN_IMAGES)
 
-eval_dataset = Dataset(eval_data_path, training=False)
+eval_dataset = Dataset(eval_data_path, training=False, limit=LIMIT_EVAL_IMAGES)
 eval_ds = eval_dataset.get_dataset(1)
 
 
@@ -1017,7 +1012,7 @@ if TRAIN:
 # In[ ]:
 
 
-test_dataset = Dataset(test_data_path, training=False)
+test_dataset = Dataset(test_data_path, training=False, limit=LIMIT_TEST_IMAGES)
 
 testing(g_model, d_model, g_model_path, d_model_path, test_dataset.get_dataset(1))
 
