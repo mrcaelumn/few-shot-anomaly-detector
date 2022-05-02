@@ -361,10 +361,7 @@ def read_data_with_labels(filepath, class_names, training, limit=100):
         
         n_samples = None
         if limit != "MAX":
-            n_samples = shots
-            if len(path_list) <  shots:
-                n_samples = len(path_list)
-       
+            n_samples = limit
                     
         path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
         
