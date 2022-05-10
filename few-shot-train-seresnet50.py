@@ -727,12 +727,13 @@ def SEResNet50(include_top=True, weights='imagenet',
                                       weights=weights)
 
     if input_tensor is None:
-        img_input = Input(shape=input_shape)
+        img_input = Input(shape=input_shape, name="input_1")
     else:
         if not K.is_keras_tensor(input_tensor):
-            img_input = Input(tensor=input_tensor, shape=input_shape)
+            img_input = Input(tensor=input_tensor, shape=input_shape, name="input_1")
         else:
             img_input = input_tensor
+            
     if K.image_data_format() == 'channels_last':
         bn_axis = 3
     else:
@@ -937,8 +938,8 @@ input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
 inputs = tf.keras.layers.Input(input_shape, name="input_1")
 # inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
-
-g_model = build_seresnet50_unet(inputs)
+input_shape = (IMG_SIZE, IMG_SIZE, IMG_C)
+g_model = build_seresnet50_unet(input_shape)
 d_model = build_discriminator(inputs)
 # grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
 d_model.compile()
