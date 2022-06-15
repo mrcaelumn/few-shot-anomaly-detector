@@ -870,7 +870,7 @@ def build_seresnet50_unet(input_shape):
     inputs = Input(input_shape, name="input_1")
     """ Pre-trained ResNet50 Model """
     seresnet50 = SEResNet50(weights=None, input_tensor=inputs)
-    seresnet50.summary()
+    # seresnet50.summary()
     """ Encoder """
     s1 = seresnet50.get_layer("input_1").output           ## (512 x 512)
     s2 = seresnet50.get_layer("conv1_relu").output        ## (256 x 256)
