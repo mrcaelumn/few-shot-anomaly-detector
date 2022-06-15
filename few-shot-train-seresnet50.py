@@ -14,12 +14,16 @@ import os
 from tqdm import tqdm
 import numpy as np
 import random
+import gc
+import multiprocess as mp
+import pandas as pd 
 
 from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score
 from sklearn.utils import shuffle
 
 from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
+import seaborn as sns
 
 
 # In[ ]:
@@ -51,7 +55,7 @@ TRAIN = True
 
 LIMIT_EVAL_IMAGES = 100
 LIMIT_TEST_IMAGES = "MAX"
-LIMIT_TRAIN_IMAGES = "MAX"
+LIMIT_TRAIN_IMAGES = 100
 
 # range between 0-1
 anomaly_weight = 0.7
@@ -62,13 +66,15 @@ inner_batch_size = 25
 eval_batch_size = 25
 
 meta_iters = 2000
-eval_iters = 1
 inner_iters = 4
 
-train_shots = 40
+train_shots = 100
 shots = 20
 classes = 1
-
+n_shots = shots
+if shots > 20 :
+    n_shots = "few"
+    
 dataset_name = "mura"
 eval_dataset_name = "mura"
 test_dataset_name = "mura"
@@ -76,15 +82,16 @@ test_dataset_name = "mura"
 mode_colour = str(IMG_H) + "_rgb"
 if IMG_C == 1:
     mode_colour = str(IMG_H) + "_gray"
-    
-name_model = mode_colour+"_"+dataset_name+"_few_shot_anomaly_detection"+"_"+str(meta_iters)
-g_model_path = "saved_model/"+name_model+"_g_model.h5"
-d_model_path = "saved_model/"+name_model+"_d_model.h5"
+
+model_type = "seresnet50"
+name_model = f"{mode_colour}_{dataset_name}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
+g_model_path = f"saved_model/{name_model}_g_model.h5"
+d_model_path = f"saved_model/{name_model}_d_model.h5"
 
 
-train_data_path = "data/"+dataset_name+"/train_data"
-eval_data_path = "data/"+eval_dataset_name+"/eval_data"
-test_data_path = "data/"+test_dataset_name+"/test_data"
+train_data_path = f"data/{dataset_name}/train_data"
+eval_data_path = f"data/{eval_dataset_name}/eval_data"
+test_data_path = f"data/{test_dataset_name}/test_data"
 
 
 # In[ ]:
@@ -259,26 +266,100 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.savefig(model_name+ '_'+name+'_iters_result.png')
     plt.show()
     plt.clf()
+
+def plot_anomaly_score(anomaly_scores, name, model_name):
+    for key, val in anomaly_scores.items():
+        sns.distplot(val,  kde=False, label=key)
+    
+#     plt.plot(epochs, disc_loss, 'b', label='Discriminator loss')
+    plt.title(name)
+    plt.xlabel('Anomaly Score')
+    plt.ylabel('Density')
+    plt.legend()
+    plt.savefig(model_name+ '_'+name+'_anomay_scores_dist.png')
+    plt.show()
+    plt.clf()
     
 def enhance_image(image, beta=0.1):
     image = tf.cast(image, tf.float64)
     image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
     return image
 
-def crop_left_and_right(img):
-    # img_shape = tf.shape(img)
-    img_left = tf.image.crop_to_bounding_box(img, 0, 0, IMG_H, IMG_W)
-    img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - IMG_H, ORI_SIZE[1] - IMG_W, IMG_H, IMG_W)
+def selecting_images_preprocessing(images_path_array, limit_image_to_process="MAX", limit_image_to_train = "MAX", middle_rows=False):
+    # images_path_array = glob(images_path)
+    final_image_path = []
+    def processing_image(img_path):
+        image = cv2.imread(img_path)
+        # print(image)
+        mean = np.mean(image)
+        std = np.std(image)
+        # print(mean, image.mean())
+        # print(std, image.std())
+        data_row = {
+            "image_path": img_path,
+            "mean": image.mean(),
+            "std": image.std(),
+            # "class": 0
+        }
+        return data_row
+    original_number_number_image = len(images_path_array)
     
-    return [img_left, img_right]
+    print("original number of data: ", original_number_number_image)
+    
+    if limit_image_to_train == "MAX":
+        limit_image_to_train = original_number_number_image
+    
+    if limit_image_to_process == "MAX":
+        print("You choose to use all of data. please wait it will take a moment.")
+    elif len(images_path_array) < limit_image_to_process:
+        print("The amount of dataset smaller than limit so we will use all images in dataset.")
+    else:
+        images_path_array = sample(images_path_array,limit_image_to_process)
+    print("processed number of data: ", len(images_path_array))
+    
+    df_analysis = pd.DataFrame(columns=['image_path','mean','std'])
+    counter = 0
+    
+    start_time = datetime.now()
+    # multiple processing
+    pool = mp.Pool(5)
+    data_rows = pool.map(processing_image, images_path_array)
+    # do your work here
+    
+    end_time = datetime.now()
+    print(f'(selecting_images_preprocessing) Duration of counting std and mean of images: {end_time - start_time}')
+    # print(data_rows)
+    
+    df_analysis = df_analysis.append(data_rows, ignore_index = True)
+    # counter += 1
+    # if counter % 100 == 0:
+    #     print("processed image: ", counter)
+            
+    final_df = df_analysis.sort_values(['std', 'mean'], ascending = [True, False])
+    
+    
+    if middle_rows:
+        print("get data from middle row")
+        n = len(final_df.index)
+        mid_n = round(n/2)
+        mid_k = round(limit_image_to_train/2)
 
-def crop_left_and_right_select_one(img):
-    # img_shape = tf.shape(img)
-    img_left = tf.image.crop_to_bounding_box(img, 0, 0, IMG_H, IMG_W)
-    img_right = tf.image.crop_to_bounding_box(img, ORI_SIZE[0] - IMG_H, ORI_SIZE[1] - IMG_W, IMG_H, IMG_W)
-    if tf.math.reduce_std(img_left) <  tf.math.reduce_std(img_right):
-        return img_left
-    return img_right
+
+        start = mid_n - mid_k
+        end = mid_n + mid_k
+
+        final = final_df.loc[start:end]
+        final_image_path = final['image_path'].head(limit_image_to_train).tolist()
+    else:
+        print("get data from top row")
+        final_image_path = final_df['image_path'].head(limit_image_to_train).tolist()
+    
+    
+    # clear zombies memory
+    del [[final_df, df_analysis]]
+    gc.collect()
+    
+    return final_image_path
 
 def sliding_crop_and_select_one(img, stepSize=stSize, windowSize=winSize):
     current_std = 0
@@ -413,7 +494,6 @@ def extraction(image, label):
     img = tf.io.decode_png(img, channels=IMG_C)
     # img = tf.io.decode_bmp(img, channels=IMG_C)
     img = prep_stage(img, True)
-    # img = crop_left_and_right_select_one(img)
     img = sliding_crop_and_select_one(img)
     img = post_stage(img)
 
@@ -428,8 +508,6 @@ def extraction_test(image, label):
     img = prep_stage(img, False)
     # img = post_stage(img)
     
-    
-    # img_list = crop_left_and_right(img)
     img_list = sliding_crop(img)
     
     img = [post_stage(a) for a in img_list]
@@ -444,9 +522,12 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
     print("Start Checking Reconstructed Image")
     g_model_inner.load_weights(g_filepath)
     d_model_inner.load_weights(d_filepath)
+    
+    normal_image = glob.glob(test_data_path+"/normal/*.png")[0]
+    defect_image = glob.glob(test_data_path+"/defect/*.png")[0]
     paths = {
-        "normal": test_data_path+"/normal/normal.png",
-        "defect": test_data_path+"/defect/defect.png",
+        "normal": normal_image,
+        "defect": defect_image,
     }
 
     for i, v in paths.items():
@@ -800,7 +881,7 @@ def build_seresnet50_unet(input_shape):
     b1 = seresnet50.get_layer("block_out_5_3_x4").output  ## (16 x 16)
 
     """ Decoder """
-    x = IMG_SIZE
+    x = IMG_H
     d1 = decoder_block(b1, s5, x)                     ## (32 x 32)
     x = x/2
     d2 = decoder_block(d1, s4, x)                     ## (64 x 64)
@@ -871,6 +952,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     feat_loss_list = []
     ssim_loss_list = []
     counter = 0
+    
     for images, labels in test_ds:
         loss_rec, loss_feat = 0.0, 0.0
         score = 0
@@ -904,8 +986,8 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     print("auc: ", auc_out)
     print("threshold: ", threshold)
 
-
-
+    plot_anomaly_score(anomaly_scores, name, model_name)
+    
     scores_ano = (scores_ano > threshold).astype(int)
     cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
     TP = cm[1][1]
@@ -938,17 +1020,17 @@ input_shape = (IMG_H, IMG_W, IMG_C)
 # set input 
 inputs = tf.keras.layers.Input(input_shape, name="input_1")
 # inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
-input_shape = (IMG_SIZE, IMG_SIZE, IMG_C)
+
 g_model = build_seresnet50_unet(input_shape)
 d_model = build_discriminator(inputs)
 # grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
 d_model.compile()
 g_model.compile()
-g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
-d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
@@ -956,7 +1038,7 @@ d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
-SSIM_REG_RATE_LF = 10
+# SSIM_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
 
@@ -992,7 +1074,7 @@ def train_step(real_images):
         loss_gen_ra = -( 
             tf.math.reduce_mean( 
                 tf.math.log( 
-                    tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+                    tf.math.sigmoid(fake_real_ra_out) + epsilon), axis=0 
             ) + tf.math.reduce_mean( 
                 tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
             ) 
@@ -1003,7 +1085,7 @@ def train_step(real_images):
                 tf.math.log(
                     tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
             ) + tf.math.reduce_mean( 
-                tf.math.log(1-tf.math.sigmoid(real_fake_ra_out) + epsilon), axis=0 
+                tf.math.log(1-tf.math.sigmoid(fake_real_ra_out) + epsilon), axis=0 
             ) 
         )
 
@@ -1011,7 +1093,7 @@ def train_step(real_images):
         loss_rec = mae(real_images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        loss_ssim =  ssim(real_images, reconstructed_images)
+        # # loss_ssim =  ssim(real_images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
         # loss_feat = mse(feature_real, feature_fake)
@@ -1021,7 +1103,7 @@ def train_step(real_images):
         gen_loss = tf.reduce_mean( 
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
-            + (loss_ssim * SSIM_REG_RATE_LF) 
+            # + (loss_ssim * SSIM_REG_RATE_LF) 
             + (loss_feat) 
         )
 
@@ -1042,6 +1124,8 @@ def train_step(real_images):
 if TRAIN:
     print("Start Trainning. ", name_model)
     best_auc = 0.7
+    
+    start_time = datetime.now()
     for meta_iter in range(meta_iters):
         frac_done = meta_iter / meta_iters
         cur_meta_step_size = (1 - frac_done) * meta_step_size
@@ -1148,6 +1232,9 @@ if TRAIN:
             g_model.save(g_model_path)
             d_model.save(d_model_path)
     
+    
+    end_time = datetime.now()
+    print(f'Duration of Training: {end_time - start_time}')
     """
     Train Ends
     """
@@ -1159,13 +1246,16 @@ if TRAIN:
 # In[ ]:
 
 
-# checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
+test_dataset = Dataset(test_data_path, training=False, limit=LIMIT_TEST_IMAGES)
+
+start_time = datetime.now()
+testing(g_model, d_model, g_model_path, d_model_path, test_dataset.get_dataset(1))
+end_time = datetime.now()
+print(f'Duration of Testing: {end_time - start_time}')
 
 
 # In[ ]:
 
 
-test_dataset = Dataset(test_data_path, training=False, limit=LIMIT_TEST_IMAGES)
-
-testing(g_model, d_model, g_model_path, d_model_path, test_dataset.get_dataset(1))
+checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
 
