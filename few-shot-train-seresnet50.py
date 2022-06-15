@@ -77,8 +77,8 @@ if shots > 20 :
     n_shots = "few"
     
 dataset_name = "mura"
-eval_dataset_name = "mura"
-test_dataset_name = "mura"
+# eval_dataset_name = "mura"
+# test_dataset_name = "mura"
 
 mode_colour = str(IMG_H) + "_rgb"
 if IMG_C == 1:
@@ -91,8 +91,8 @@ d_model_path = f"saved_model/{name_model}_d_model.h5"
 
 
 train_data_path = f"data/{dataset_name}/train_data"
-eval_data_path = f"data/{eval_dataset_name}/eval_data"
-test_data_path = f"data/{test_dataset_name}/test_data"
+eval_data_path = f"data/{dataset_name}/eval_data"
+test_data_path = f"data/{dataset_name}/test_data"
 
 
 # In[ ]:
