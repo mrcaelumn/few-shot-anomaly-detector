@@ -468,12 +468,12 @@ def prep_stage(x, train=True):
     beta_contrast = 0.1
     
     if train:
-        # x = enhance_image(x, beta_contrast)
-        x = tfa.image.equalize(x)
+        x = enhance_image(x, beta_contrast)
+        # x = tfa.image.equalize(x)
         # x = custom_v3(x)
     else: 
-        # x = enhance_image(x, beta_contrast)
-        x = tfa.image.equalize(x)
+        x = enhance_image(x, beta_contrast)
+        # x = tfa.image.equalize(x)
         # x = custom_v3(x)
     return x
 
