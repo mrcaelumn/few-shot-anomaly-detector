@@ -11,6 +11,7 @@ import tensorflow_addons as tfa
 import itertools
 
 import os
+from glob import glob
 from tqdm import tqdm
 import numpy as np
 import random
@@ -703,15 +704,15 @@ def calculate_a_score(out_g_model, out_d_model, images):
 
 
 def conv_block_2nd(input, num_filters):
-    x = Conv2D(num_filters, 4, padding="same")(input)
+    x = Conv2D(num_filters, 3, padding="same")(input)
     x = BatchNormalization()(x)
-    # x = Activation("relu")(x)
-    x = tf.keras.layers.LeakyReLU()(x)
+    x = Activation("relu")(x)
+    # x = tf.keras.layers.LeakyReLU()(x)
 
-    x = Conv2D(num_filters, 4, padding="same")(x)
+    x = Conv2D(num_filters, 3, padding="same")(x)
     x = BatchNormalization()(x)
-    # x = Activation("relu")(x)
-    x = tf.keras.layers.LeakyReLU()(x)
+    x = Activation("relu")(x)
+    # x = tf.keras.layers.LeakyReLU()(x)
 
     return x
 
@@ -750,7 +751,7 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
 
     se = GlobalAveragePooling2D(name='pool' + block_name + '_gap')(x)
-    se = Dense(filters3 // 16, activation='relu', name = 'fc' + block_name + '_sqz')(se)
+    se = Dense(filters3 // 8, activation='relu', name = 'fc' + block_name + '_sqz')(se)
     se = Dense(filters3, activation='sigmoid', name = 'fc' + block_name + '_exc')(se)
     se = Reshape([1, 1, filters3])(se)
     x = Multiply(name='scale' + block_name)([x, se])
@@ -916,13 +917,13 @@ def build_discriminator(inputs):
     features = []
     for i in range(0, num_layers):
         if i == 0:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             # x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
         
         else:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
@@ -989,7 +990,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     print("auc: ", auc_out)
     print("threshold: ", threshold)
 
-    plot_anomaly_score(anomaly_scores, name, model_name)
+    # plot_anomaly_score(anomaly_scores, name, model_name)
     
     scores_ano = (scores_ano > threshold).astype(int)
     cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
