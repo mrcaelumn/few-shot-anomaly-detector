@@ -477,18 +477,19 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
         else: 
             n_samples = len(path_list)
             
-        if training:
-            ''' 
-            selecting by attribute of image
-            '''
-            combined = np.transpose((path_list, class_list))
-            path_list, class_list = selecting_images_preprocessing(combined, limit_image_to_train=n_samples, middle_rows=True)
+#         if training:
+#             ''' 
+#             selecting by attribute of image
+#             '''
+#             combined = np.transpose((path_list, class_list))
+#             path_list, class_list = selecting_images_preprocessing(combined, limit_image_to_train=n_samples, middle_rows=True)
         
-        else:
-            ''' 
-            random selecting
-            '''
-            path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
+#         else:
+#             ''' 
+#             random selecting
+#             '''
+
+        path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
         
         image_list = image_list + path_list
         label_list = label_list + class_list
@@ -1085,7 +1086,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     print("threshold: ", threshold)
     
     # histogram distribution of anomaly scores
-    plot_anomaly_score(scores_ano, real_label, name, model_name)
+    plot_anomaly_score(scores_ano, real_label, "anomaly_score_dist", model_name)
     
     scores_ano = (scores_ano > threshold).astype(int)
     cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
