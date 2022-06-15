@@ -26,6 +26,7 @@ from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 from datetime import datetime
+import cv2
 
 
 # In[ ]:
@@ -53,7 +54,7 @@ stSize = 20
 # WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 AUTOTUNE = tf.data.AUTOTUNE
 
-TRAIN = True
+
 
 LIMIT_EVAL_IMAGES = 100
 LIMIT_TEST_IMAGES = "MAX"
@@ -78,6 +79,7 @@ if shots > 20 :
     n_shots = "few"
     
 dataset_name = "mura"
+prepro = "sobely"
 # eval_dataset_name = "mura"
 # test_dataset_name = "mura"
 
@@ -86,11 +88,15 @@ if IMG_C == 1:
     mode_colour = str(IMG_H) + "_gray"
 
 model_type = "seresnet50"
-name_model = f"{mode_colour}_{dataset_name}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
+name_model = f"{mode_colour}_{dataset_name}_{prepro}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
 g_model_path = f"saved_model/{name_model}_g_model.h5"
 d_model_path = f"saved_model/{name_model}_d_model.h5"
 
-
+TRAIN = True
+if not TRAIN:
+    g_model_path = f"saved_model/g_model_name.h5"
+    d_model_path = f"saved_model/d_model_name.h5"
+    
 train_data_path = f"data/{dataset_name}/train_data"
 eval_data_path = f"data/{dataset_name}/eval_data"
 test_data_path = f"data/{dataset_name}/test_data"
@@ -130,7 +136,6 @@ class MultiFeatureLoss(tf.keras.losses.Loss):
             result = result + (weight * self.mse_func(r, f))
         
         return result
-    
     
 # class for Adversarial loss function
 class AdversarialLoss(tf.keras.losses.Loss):
@@ -269,28 +274,42 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.show()
     plt.clf()
 
-def plot_anomaly_score(anomaly_scores, name, model_name):
-    for key, val in anomaly_scores.items():
-        sns.distplot(val,  kde=False, label=key)
+def plot_anomaly_score(score_ano, labels, name, model_name):
+    
+    df = pd.DataFrame(
+    {'predicts': score_ano,
+     'label': labels
+    })
+    
+    df_normal = df[df.label == 0]
+    sns.distplot(df_normal['predicts'],  kde=False, label='normal')
+
+    df_defect = df[df.label == 1]
+    sns.distplot(df_defect['predicts'],  kde=False, label='defect')
     
 #     plt.plot(epochs, disc_loss, 'b', label='Discriminator loss')
     plt.title(name)
-    plt.xlabel('Anomaly Score')
-    plt.ylabel('Density')
-    plt.legend()
+    plt.xlabel('Anomaly Scores')
+    plt.ylabel('Number of samples')
+    plt.legend(prop={'size': 12})
     plt.savefig(model_name+ '_'+name+'_anomay_scores_dist.png')
     plt.show()
     plt.clf()
     
 def enhance_image(image, beta=0.1):
-    image = tf.cast(image, tf.float64)
-    image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
+    # image = tf.cast(image, tf.float64)
+    # image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
+    image = ((1 + beta) * image) + (-beta * np.mean(image))
     return image
 
-def selecting_images_preprocessing(images_path_array, limit_image_to_process="MAX", limit_image_to_train = "MAX", middle_rows=False):
+def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MAX", middle_rows=False):
     # images_path_array = glob(images_path)
     final_image_path = []
-    def processing_image(img_path):
+    final_label = []
+    def processing_image(img_data):
+        img_path = img_data[0]
+        label = img_data[1]
+        # print(img_path, label)
         image = cv2.imread(img_path)
         # print(image)
         mean = np.mean(image)
@@ -301,29 +320,22 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_process="MA
             "image_path": img_path,
             "mean": image.mean(),
             "std": image.std(),
-            # "class": 0
+            "class": label
         }
+        # print(data_row)
         return data_row
-    original_number_number_image = len(images_path_array)
     
-    print("original number of data: ", original_number_number_image)
-    
-    if limit_image_to_train == "MAX":
-        limit_image_to_train = original_number_number_image
-    
-    if limit_image_to_process == "MAX":
-        print("You choose to use all of data. please wait it will take a moment.")
-    elif len(images_path_array) < limit_image_to_process:
-        print("The amount of dataset smaller than limit so we will use all images in dataset.")
-    else:
-        images_path_array = sample(images_path_array,limit_image_to_process)
+        
     print("processed number of data: ", len(images_path_array))
+    if limit_image_to_train == "MAX":
+        limit_image_to_train = len(images_path_array)
+            
+    df_analysis = pd.DataFrame(columns=['image_path','mean','std', 'class'])
     
-    df_analysis = pd.DataFrame(columns=['image_path','mean','std'])
-    counter = 0
-    
+    # multiple processing calculating std
+    # print(images_path_array)
     start_time = datetime.now()
-    # multiple processing
+    
     pool = mp.Pool(5)
     data_rows = pool.map(processing_image, images_path_array)
     # do your work here
@@ -339,29 +351,36 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_process="MA
             
     final_df = df_analysis.sort_values(['std', 'mean'], ascending = [True, False])
     
-    
+    print(len(final_df))
     if middle_rows:
         print("get data from middle row")
         n = len(final_df.index)
+        # print(n)
         mid_n = round(n/2)
         mid_k = round(limit_image_to_train/2)
 
 
         start = mid_n - mid_k
         end = mid_n + mid_k
-
-        final = final_df.loc[start:end]
+        # print(start, end)
+        final = final_df.iloc[start:end]
+        # print(final)
         final_image_path = final['image_path'].head(limit_image_to_train).tolist()
+        final_label = final['class'].head(limit_image_to_train).tolist()
+        # final_label = final['class'].head(limit_image_to_train).tolist()
     else:
         print("get data from top row")
         final_image_path = final_df['image_path'].head(limit_image_to_train).tolist()
+        final_label = final_df['class'].head(limit_image_to_train).tolist()
     
     
     # clear zombies memory
     del [[final_df, df_analysis]]
     gc.collect()
     
-    return final_image_path
+    # print(final_image_path, final_label)
+    # print(len(final_image_path), len(final_label))
+    return final_image_path, final_label
 
 def sliding_crop_and_select_one(img, stepSize=stSize, windowSize=winSize):
     current_std = 0
@@ -434,7 +453,7 @@ def custom_v3(img):
 # In[ ]:
 
 
-def read_data_with_labels(filepath, class_names, training, limit=100):
+def read_data_with_labels(filepath, class_names, training=True, limit=100):
    
     image_list = []
     label_list = []
@@ -455,8 +474,21 @@ def read_data_with_labels(filepath, class_names, training, limit=100):
         n_samples = None
         if limit != "MAX":
             n_samples = limit
-                    
-        path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
+        else: 
+            n_samples = len(path_list)
+            
+        if training:
+            ''' 
+            selecting by attribute of image
+            '''
+            combined = np.transpose((path_list, class_list))
+            path_list, class_list = selecting_images_preprocessing(combined, limit_image_to_train=n_samples, middle_rows=True)
+        
+        else:
+            ''' 
+            random selecting
+            '''
+            path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
         
         image_list = image_list + path_list
         label_list = label_list + class_list
@@ -467,13 +499,26 @@ def read_data_with_labels(filepath, class_names, training, limit=100):
 
 def prep_stage(x, train=True):
     beta_contrast = 0.1
+    # apply sobel
+    k_size = 3 
+    if prepro == "sobelx":
+        x = cv2.Sobel(x, cv2.CV_32F, 1, 0,ksize=k_size)
+    elif prepr == "sobely":
+        x = cv2.Sobel(x, cv2.CV_32F, 0, 1,ksize=k_size)
+    elif prepr == "sobelxy":
+        x = cv2.Sobel(x, cv2.CV_32F, 1, 1,ksize=k_size) 
+    # enchance the brightness
+    x = enhance_image(x, beta_contrast)
     
-    if train:
-        x = enhance_image(x, beta_contrast)
+    x = tf.image.convert_image_dtype(x, tf.float32)
+    
+    
+    # if train:
+        # x = enhance_image(x, beta_contrast)
         # x = tfa.image.equalize(x)
         # x = custom_v3(x)
-    else: 
-        x = enhance_image(x, beta_contrast)
+    # else: 
+        # x = enhance_image(x, beta_contrast)
         # x = tfa.image.equalize(x)
         # x = custom_v3(x)
     return x
@@ -483,7 +528,7 @@ def post_stage(x):
     x = tf.image.resize(x, (IMG_H, IMG_W))
     # x = tf.image.resize_with_crop_or_pad(x, IMG_H, IMG_W)
     # normalize to the range -1,1
-    x = tf.cast(x, tf.float32)
+    # x = tf.cast(x, tf.float32)
     x = (x - 127.5) / 127.5
     # normalize to the range 0-1
     # img /= 255.0
@@ -492,10 +537,13 @@ def post_stage(x):
 def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
-    img = tf.io.read_file(image)
-    img = tf.io.decode_png(img, channels=IMG_C)
-    # img = tf.io.decode_bmp(img, channels=IMG_C)
+    # img = tf.io.read_file(image)
+    # img = tf.io.decode_png(img, channels=IMG_C)
+    img = cv2.imread(image)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
     img = prep_stage(img, True)
+    
     img = sliding_crop_and_select_one(img)
     img = post_stage(img)
 
@@ -504,9 +552,11 @@ def extraction(image, label):
 def extraction_test(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
-    img = tf.io.read_file(image)
-    img = tf.io.decode_png(img, channels=IMG_C)
-    # img = tf.io.decode_bmp(img, channels=IMG_C)
+    # img = tf.io.read_file(image)
+    # img = tf.io.decode_png(img, channels=IMG_C)
+     img = cv2.imread(image)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
     img = prep_stage(img, False)
     # img = post_stage(img)
     
@@ -525,8 +575,8 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
     g_model_inner.load_weights(g_filepath)
     d_model_inner.load_weights(d_filepath)
     
-    normal_image = glob.glob(test_data_path+"/normal/*.png")[0]
-    defect_image = glob.glob(test_data_path+"/defect/*.png")[0]
+    normal_image = glob(test_data_path+"/normal/*.png")[0]
+    defect_image = glob(test_data_path+"/defect/*.png")[0]
     paths = {
         "normal": normal_image,
         "defect": defect_image,
@@ -989,8 +1039,9 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     auc_out, threshold = roc(real_label, scores_ano, name_model)
     print("auc: ", auc_out)
     print("threshold: ", threshold)
-
-    # plot_anomaly_score(anomaly_scores, name, model_name)
+    
+    # histogram distribution of anomaly scores
+    plot_anomaly_score(scores_ano, real_label, name, model_name)
     
     scores_ano = (scores_ano > threshold).astype(int)
     cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
@@ -1042,7 +1093,7 @@ d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, 
 
 ADV_REG_RATE_LF = 1
 REC_REG_RATE_LF = 50
-# SSIM_REG_RATE_LF = 10
+SSIM_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
 
@@ -1097,7 +1148,7 @@ def train_step(real_images):
         loss_rec = mae(real_images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        # # loss_ssim =  ssim(real_images, reconstructed_images)
+        loss_ssim =  ssim(real_images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
         # loss_feat = mse(feature_real, feature_fake)
@@ -1107,7 +1158,7 @@ def train_step(real_images):
         gen_loss = tf.reduce_mean( 
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
-            # + (loss_ssim * SSIM_REG_RATE_LF) 
+            + (loss_ssim * SSIM_REG_RATE_LF) 
             + (loss_feat) 
         )
 
