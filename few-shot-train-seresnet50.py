@@ -703,13 +703,15 @@ def calculate_a_score(out_g_model, out_d_model, images):
 
 
 def conv_block_2nd(input, num_filters):
-    x = Conv2D(num_filters, 3, padding="same")(input)
+    x = Conv2D(num_filters, 4, padding="same")(input)
     x = BatchNormalization()(x)
-    x = Activation("relu")(x)
+    # x = Activation("relu")(x)
+    x = tf.keras.layers.LeakyReLU()(x)
 
-    x = Conv2D(num_filters, 3, padding="same")(x)
+    x = Conv2D(num_filters, 4, padding="same")(x)
     x = BatchNormalization()(x)
-    x = Activation("relu")(x)
+    # x = Activation("relu")(x)
+    x = tf.keras.layers.LeakyReLU()(x)
 
     return x
 
@@ -914,13 +916,13 @@ def build_discriminator(inputs):
     features = []
     for i in range(0, num_layers):
         if i == 0:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             # x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
         
         else:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
@@ -1124,7 +1126,7 @@ def train_step(real_images):
 
 if TRAIN:
     print("Start Trainning. ", name_model)
-    best_auc = 0.7
+    best_auc = 0.84
     
     start_time = datetime.now()
     for meta_iter in range(meta_iters):
