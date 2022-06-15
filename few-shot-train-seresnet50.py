@@ -652,8 +652,9 @@ class Dataset:
             self.labels = list(self.data.keys())
         end_time = datetime.now()
         
-        print(f'(Loading Dataset and Preprocessing) Duration of counting std and mean of images: {end_time - start_time}')
         print('classes: ', class_names)
+        print(f'(Loading Dataset and Preprocessing) Duration of counting std and mean of images: {end_time - start_time}')
+        
 
     def get_mini_dataset(
         self, batch_size, repetitions, shots, num_classes, split=False
