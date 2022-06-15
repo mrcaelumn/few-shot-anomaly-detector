@@ -78,8 +78,8 @@ n_shots = shots
 if shots > 20 :
     n_shots = "few"
     
-dataset_name = "mura"
-prepro = "sobely"
+DATABASE_NAME = "mura"
+# PREPRO = "sobely"
 # eval_dataset_name = "mura"
 # test_dataset_name = "mura"
 
@@ -88,7 +88,7 @@ if IMG_C == 1:
     mode_colour = str(IMG_H) + "_gray"
 
 model_type = "seresnet50"
-name_model = f"{mode_colour}_{dataset_name}_{prepro}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
+name_model = f"{mode_colour}_{DATABASE_NAME}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
 g_model_path = f"saved_model/{name_model}_g_model.h5"
 d_model_path = f"saved_model/{name_model}_d_model.h5"
 
@@ -97,9 +97,9 @@ if not TRAIN:
     g_model_path = f"saved_model/g_model_name.h5"
     d_model_path = f"saved_model/d_model_name.h5"
     
-train_data_path = f"data/{dataset_name}/train_data"
-eval_data_path = f"data/{dataset_name}/eval_data"
-test_data_path = f"data/{dataset_name}/test_data"
+train_data_path = f"data/{DATABASE_NAME}/train_data"
+eval_data_path = f"data/{DATABASE_NAME}/eval_data"
+test_data_path = f"data/{DATABASE_NAME}/test_data"
 
 
 # In[ ]:
@@ -297,9 +297,9 @@ def plot_anomaly_score(score_ano, labels, name, model_name):
     plt.clf()
     
 def enhance_image(image, beta=0.1):
-    # image = tf.cast(image, tf.float64)
-    # image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
-    image = ((1 + beta) * image) + (-beta * np.mean(image))
+    image = tf.cast(image, tf.float64)
+    image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
+    # image = ((1 + beta) * image) + (-beta * np.mean(image))
     return image
 
 def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MAX", middle_rows=False):
@@ -320,7 +320,7 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
             "image_path": img_path,
             "mean": image.mean(),
             "std": image.std(),
-            "class": label
+            "class": int(label)
         }
         # print(data_row)
         return data_row
@@ -338,12 +338,11 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
     
     pool = mp.Pool(5)
     data_rows = pool.map(processing_image, images_path_array)
-    # do your work here
     
+    # do your work here
     # end_time = datetime.now()
     # print(f'(selecting_images_preprocessing) Duration of counting std and mean of images: {end_time - start_time}')
     # print(data_rows)
-    
     df_analysis = df_analysis.append(data_rows, ignore_index = True)
     # counter += 1
     # if counter % 100 == 0:
@@ -351,7 +350,7 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
             
     final_df = df_analysis.sort_values(['std', 'mean'], ascending = [True, False])
     
-    print(len(final_df))
+    # print(len(final_df))
     if middle_rows:
         print("get data from middle row")
         n = len(final_df.index)
@@ -380,6 +379,7 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
     
     # print(final_image_path, final_label)
     # print(len(final_image_path), len(final_label))
+    final_label = list(map(int, final_label))
     return final_image_path, final_label
 
 def sliding_crop_and_select_one(img, stepSize=stSize, windowSize=winSize):
@@ -493,24 +493,27 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
         image_list = image_list + path_list
         label_list = label_list + class_list
   
-    # print(image_list, label_list)
+    print("number of data processed", len(image_list))
     
     return image_list, label_list
 
 def prep_stage(x, train=True):
     beta_contrast = 0.1
+    
     # apply sobel
-    k_size = 3 
-    if prepro == "sobelx":
-        x = cv2.Sobel(x, cv2.CV_32F, 1, 0,ksize=k_size)
-    elif prepr == "sobely":
-        x = cv2.Sobel(x, cv2.CV_32F, 0, 1,ksize=k_size)
-    elif prepr == "sobelxy":
-        x = cv2.Sobel(x, cv2.CV_32F, 1, 1,ksize=k_size) 
+    # k_size = 3 
+    
+    # if PREPRO == "sobelx":
+    #     x = cv2.Sobel(x, cv2.CV_32F, 1, 0,ksize=k_size)
+    # elif PREPRO == "sobely":
+    #     x = cv2.Sobel(x, cv2.CV_32F, 0, 1,ksize=k_size)
+    # elif PREPRO == "sobelxy":
+    #     x = cv2.Sobel(x, cv2.CV_32F, 1, 1,ksize=k_size) 
+        
     # enchance the brightness
     x = enhance_image(x, beta_contrast)
     
-    x = tf.image.convert_image_dtype(x, tf.float32)
+    # x = tf.image.convert_image_dtype(x, tf.float32)
     
     
     # if train:
@@ -534,13 +537,16 @@ def post_stage(x):
     # img /= 255.0
     return x
 
+
+
 def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
-    # img = tf.io.read_file(image)
-    # img = tf.io.decode_png(img, channels=IMG_C)
-    img = cv2.imread(image)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = tf.io.read_file(image)
+    img = tf.io.decode_png(img, channels=IMG_C)
+    # print(image, label)
+    # img = cv2.imread(image)
+    # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
     img = prep_stage(img, True)
     
@@ -549,13 +555,14 @@ def extraction(image, label):
 
     return img, label
 
+
 def extraction_test(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
-    # img = tf.io.read_file(image)
-    # img = tf.io.decode_png(img, channels=IMG_C)
-    img = cv2.imread(image)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = tf.io.read_file(image)
+    img = tf.io.decode_png(img, channels=IMG_C)
+    # img = cv2.imread(image)
+    # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
     img = prep_stage(img, False)
     # img = post_stage(img)
@@ -637,6 +644,9 @@ class Dataset:
         self.data = {}
         class_names = ["normal"] if training else ["normal", "defect"]
         filenames, labels = read_data_with_labels(path_file, class_names, training, limit)
+        # print(filenames)
+        # print(labels)
+        # self.ds_ = zip(filenames, labels)
         
         ds = tf.data.Dataset.from_tensor_slices((filenames, labels))
         self.ds = ds.shuffle(buffer_size=1024, seed=random.randint(123, 10000) )
@@ -644,12 +654,32 @@ class Dataset:
         
         if training:
             for image, label in ds.map(extraction):
+                
                 image = image.numpy()
                 label = str(label.numpy())
+                
                 if label not in self.data:
                     self.data[label] = []
+                    
                 self.data[label].append(image)
+                
             self.labels = list(self.data.keys())
+            
+            
+#             for image, label in self.ds_:
+#                 # print(image, label)
+#                 image, label = extraction(image, label)
+#                 # image = image
+#                 # label = str(label.numpy())
+                
+#                 if label not in self.data:
+                    
+#                     self.data[label] = []
+                    
+#                 self.data[label].append(image)
+                
+#             self.labels = list(self.data.keys())
+            
         end_time = datetime.now()
         
         print('classes: ', class_names)
@@ -699,7 +729,17 @@ class Dataset:
         return dataset
     
     def get_dataset(self, batch_size):
+        # images = []
+        # labels = []
+        # for image, label in self.ds_:
+        #     image, label = extraction_test(image, label)
+        #     image = image
+        #     label = str(label)
+        #     images.append(image)
+        #     labels.append(label)
+            
         ds = self.ds.map(extraction_test, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        # ds = tf.data.Dataset.from_tensor_slices((images, labels))
         ds = ds.batch(batch_size)
         ds = ds.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         return ds
