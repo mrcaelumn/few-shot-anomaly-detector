@@ -334,14 +334,14 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
     
     # multiple processing calculating std
     # print(images_path_array)
-    start_time = datetime.now()
+    # start_time = datetime.now()
     
     pool = mp.Pool(5)
     data_rows = pool.map(processing_image, images_path_array)
     # do your work here
     
-    end_time = datetime.now()
-    print(f'(selecting_images_preprocessing) Duration of counting std and mean of images: {end_time - start_time}')
+    # end_time = datetime.now()
+    # print(f'(selecting_images_preprocessing) Duration of counting std and mean of images: {end_time - start_time}')
     # print(data_rows)
     
     df_analysis = df_analysis.append(data_rows, ignore_index = True)
@@ -554,7 +554,7 @@ def extraction_test(image, label):
     # scale pixel values and convert the RGB image to grayscale
     # img = tf.io.read_file(image)
     # img = tf.io.decode_png(img, channels=IMG_C)
-     img = cv2.imread(image)
+    img = cv2.imread(image)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
     img = prep_stage(img, False)
@@ -633,8 +633,8 @@ class Dataset:
     def __init__(self, path_file, training=True, limit=100):
         # Download the tfrecord files containing the omniglot data and convert to a
         # dataset.
+        start_time = datetime.now()
         self.data = {}
-        
         class_names = ["normal"] if training else ["normal", "defect"]
         filenames, labels = read_data_with_labels(path_file, class_names, training, limit)
         
@@ -650,7 +650,10 @@ class Dataset:
                     self.data[label] = []
                 self.data[label].append(image)
             self.labels = list(self.data.keys())
-            
+        end_time = datetime.now()
+        
+        print(f'(Loading Dataset and Preprocessing) Duration of counting std and mean of images: {end_time - start_time}')
+        print('classes: ', class_names)
 
     def get_mini_dataset(
         self, batch_size, repetitions, shots, num_classes, split=False
