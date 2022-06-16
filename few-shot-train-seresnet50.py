@@ -801,13 +801,15 @@ def calculate_a_score(out_g_model, out_d_model, images):
 def conv_block_2nd(input, num_filters):
     x = Conv2D(num_filters, 3, padding="same")(input)
     x = BatchNormalization()(x)
-    x = Activation("relu")(x)
-    # x = tf.keras.layers.LeakyReLU()(x)
+    # x = Activation("relu")(x)
+    x = Activation(tf.nn.leaky_relu)(x)
+ 
 
     x = Conv2D(num_filters, 3, padding="same")(x)
     x = BatchNormalization()(x)
-    x = Activation("relu")(x)
-    # x = tf.keras.layers.LeakyReLU()(x)
+    # x = Activation("relu")(x)
+    x = Activation(tf.nn.leaky_relu)(x)
+
 
     return x
 
@@ -836,11 +838,13 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
 
     x = Conv2D(filters1, (1, 1), use_bias=False, name=conv_name_base + '_x1')(input_tensor)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x1_bn')(x)
-    x = Activation('relu', name=relu_name_base + '_x1')(x)
+    # x = Activation('relu', name=relu_name_base + '_x1')(x)
+    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
 
     x = Conv2D(filters2, kernel_size, padding='same', use_bias=False, name=conv_name_base + '_x2')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x2_bn')(x)
-    x = Activation('relu', name=relu_name_base + '_x2')(x)
+    # x = Activation('relu', name=relu_name_base + '_x2')(x)
+    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
 
     x = Conv2D(filters3, (1, 1), use_bias=False, name=conv_name_base + '_x3')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
@@ -852,7 +856,8 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
     x = Multiply(name='scale' + block_name)([x, se])
 
     x = add([x, input_tensor], name='block_' + block_name + '_x4')
-    x = Activation('relu', name='block_out_' + block_name + '_x4')(x)
+    # x = Activation('relu', name='block_out_' + block_name + '_x4')(x)
+    x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name + '_x4')(x)
     return x
 
 
@@ -870,11 +875,13 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2))
 
     x = Conv2D(filters1, (1, 1), use_bias=False, name=conv_name_base + '_x1')(input_tensor)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x1_bn')(x)
-    x = Activation('relu', name=relu_name_base + '_x1')(x)
+    # x = Activation('relu', name=relu_name_base + '_x1')(x)
+    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
 
     x = Conv2D(filters2, kernel_size, strides=strides, padding='same', use_bias=False, name=conv_name_base + '_x2')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x2_bn')(x)
-    x = Activation('relu', name=relu_name_base + '_x2')(x)
+    # x = Activation('relu', name=relu_name_base + '_x2')(x)
+    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
 
     x = Conv2D(filters3, (1, 1), use_bias=False, name=conv_name_base + '_x3')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
@@ -889,7 +896,8 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2))
     shortcut = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_prj_bn')(shortcut)
 
     x = add([x, shortcut], name='block_' + block_name)
-    x = Activation('relu', name='block_out_' + block_name)(x)
+    # x = Activation('relu', name='block_out_' + block_name)(x)
+    x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name)(x)
     return x
 
 
@@ -923,7 +931,8 @@ def SEResNet50(include_top=True, weights='imagenet',
     # x = ZeroPadding2D(padding=(2, 2), name='conv1_pad')(img_input)
     x = Conv2D(64, (7, 7), strides=(2, 2), padding='same', use_bias=False, name='conv1')(img_input)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name='conv1_bn')(x)
-    x = Activation('relu', name='conv1_relu')(x)
+    # x = Activation('relu', name='conv1_relu')(x)
+    x = Activation(tf.nn.leaky_relu, name='conv1_relu')(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='conv1_pool')(x)
     # x = ZeroPadding2D(padding=(1, 1), name='conv1_pad')(x)
     
@@ -1086,7 +1095,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     print("threshold: ", threshold)
     
     # histogram distribution of anomaly scores
-    plot_anomaly_score(scores_ano, real_label, "anomaly_score_dist", model_name)
+    plot_anomaly_score(scores_ano, real_label, "anomaly_score_dist", name_model)
     
     scores_ano = (scores_ano > threshold).astype(int)
     cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
