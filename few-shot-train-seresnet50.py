@@ -378,16 +378,28 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
         # print(final)
         final_image_path = final['image_path'].head(limit_image_to_train).tolist()
         final_label = final['class'].head(limit_image_to_train).tolist()
-        # final_label = final['class'].head(limit_image_to_train).tolist()
     else:
         print("get data from top bottom row")
         val = limit_image_to_train/2
         first = math.floor(val)
         second = math.ceil(val)
         
-        # print
-        final_image_path = final_df['image_path'].head(first).tolist() + final_df['image_path'].tail(second).tolist()
-        final_label = final_df['class'].head(first).tolist() + final_df['class'].tail(second).tolist()
+        # top & bottom
+        # final_image_path = final_df['image_path'].head(first).tolist() + final_df['image_path'].tail(second).tolist()
+        # final_label = final_df['class'].head(first).tolist() + final_df['class'].tail(second).tolist()
+                
+        # top & mid
+        n = len(final_df.index)
+        mid_n = round(n/2)
+        mid_k = round(second/2)
+
+        start = mid_n - mid_k
+        end = mid_n + mid_k
+        
+        final = final_df.iloc[start:end]
+        
+        final_image_path = final_df['image_path'].head(first).tolist() + final['image_path'].head(second).tolist()
+        final_label = final_df['class'].head(first).tolist() + final['class'].head(second).tolist()
     
     
     # clear zombies memory
