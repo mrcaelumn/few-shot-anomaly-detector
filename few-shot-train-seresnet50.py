@@ -368,9 +368,14 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
         final_label = final['class'].head(limit_image_to_train).tolist()
         # final_label = final['class'].head(limit_image_to_train).tolist()
     else:
-        print("get data from top row")
-        final_image_path = final_df['image_path'].head(limit_image_to_train).tolist()
-        final_label = final_df['class'].head(limit_image_to_train).tolist()
+        print("get data from top bottom row")
+        val = limit_image_to_train/2
+        first = math.floor(val)
+        second = math.ceil(val)
+        
+        # print
+        final_image_path = final_df['image_path'].head(first).tolist() + final_df['image_path'].tail(second).tolist()
+        final_label = final_df['class'].head(first).tolist() + final_df['class'].tail(second).tolist()
     
     
     # clear zombies memory
@@ -477,19 +482,18 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
         else: 
             n_samples = len(path_list)
             
-#         if training:
-#             ''' 
-#             selecting by attribute of image
-#             '''
-#             combined = np.transpose((path_list, class_list))
-#             path_list, class_list = selecting_images_preprocessing(combined, limit_image_to_train=n_samples, middle_rows=True)
+        if training:
+            ''' 
+            selecting by attribute of image
+            '''
+            combined = np.transpose((path_list, class_list))
+            path_list, class_list = selecting_images_preprocessing(combined, limit_image_to_train=n_samples, middle_rows=False)
         
-#         else:
-#             ''' 
-#             random selecting
-#             '''
-
-        path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
+        else:
+            ''' 
+            random selecting
+            '''
+            path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=random.randint(123, 10000))
         
         image_list = image_list + path_list
         label_list = label_list + class_list
@@ -1021,13 +1025,13 @@ def build_discriminator(inputs):
     features = []
     for i in range(0, num_layers):
         if i == 0:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             # x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
         
         else:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
