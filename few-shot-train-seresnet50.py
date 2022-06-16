@@ -156,6 +156,17 @@ class AdversarialLoss(tf.keras.losses.Loss):
 # In[ ]:
 
 
+def plot_roc_curve(fpr, tpr, name_model):
+    plt.plot(fpr, tpr, color='orange', label='ROC')
+    plt.plot([0, 1], [0, 1], color='darkblue', linestyle='--')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend()
+    plt.savefig(name_model+'_roc_curve.png')
+    plt.show()
+    plt.clf()
+
 ''' calculate the auc value for lables and scores'''
 def roc(labels, scores, name_model):
     """Compute ROC curve and ROC area for each class"""
@@ -168,7 +179,7 @@ def roc(labels, scores, name_model):
     optimal_idx = np.argmax(tpr - fpr)
     optimal_threshold = threshold[optimal_idx]
     # draw plot for ROC-Curve
-    # plot_roc_curve(fpr, tpr, name_model)
+    plot_roc_curve(fpr, tpr, name_model)
     
     return roc_auc, optimal_threshold
 
@@ -611,7 +622,10 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         name_subplot = mode+'_original_'+i
         axes.append( fig.add_subplot(rows, cols, 1) )
         axes[-1].set_title('_original_')  
-        plt.imshow(img.numpy().astype("int64"), alpha=1.0)
+        
+        img = np.clip(img.numpy(), 0, 1)
+        
+        plt.imshow(img.astype(np.uint8), alpha=1.0)
         plt.axis('off')
 
        
@@ -627,7 +641,10 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         name_subplot = mode+'_reconstructed_'+i
         axes.append( fig.add_subplot(rows, cols, 3) )
         axes[-1].set_title('_reconstructed_') 
-        plt.imshow(reconstructed_images.numpy().astype("int64"), alpha=1.0)
+        
+        reconstructed_images = np.clip(reconstructed_images.numpy(), 0, 1)
+        
+        plt.imshow(reconstructed_images.astype(np.uint8), alpha=1.0)
         plt.axis('off')
 
         fig.tight_layout()    
