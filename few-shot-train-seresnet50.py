@@ -65,7 +65,8 @@ LIMIT_TRAIN_IMAGES = 100
 NUMBER_IMAGES_SELECTED = 1000
 
 # range between 0-1
-anomaly_weight = 0.9
+anomaly_weight = 0.7
+
 learning_rate = 0.002
 meta_step_size = 0.25
 
@@ -73,8 +74,8 @@ inner_batch_size = 25
 eval_batch_size = 25
 
 meta_iters = 2000
-inner_iters = 5
-no_datasets = 0 # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
+inner_iters = 4
+
 train_shots = 100
 shots = 20
 classes = 1
@@ -82,7 +83,14 @@ n_shots = shots
 if shots > 20 :
     n_shots = "few"
     
-DATABASE_NAME = "mura"
+DATASET_NAME = "mura"
+NO_DATASET = 0 # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
+PERCENTAGE_COMPOSITION_DATASET = {
+    "top": 50,
+    "mid": 40,
+    "bottom": 10
+}
+# METHOD_SLICE_DATA = 5 # 0=mid, 1=top, 2=bottom, 3=top-bottom, 4=top-mid, 5=bottom-mid
 # PREPRO = "sobely"
 # eval_dataset_name = "mura"
 # test_dataset_name = "mura"
@@ -92,7 +100,7 @@ if IMG_C == 1:
     mode_colour = str(IMG_H) + "_gray"
 
 model_type = "seresnet50"
-name_model = f"{mode_colour}_{DATABASE_NAME}_{no_datasets}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
+name_model = f"{mode_colour}_{DATASET_NAME}_{NO_DATASET}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
 g_model_path = f"saved_model/{name_model}_g_model.h5"
 d_model_path = f"saved_model/{name_model}_d_model.h5"
 
@@ -101,9 +109,9 @@ if not TRAIN:
     g_model_path = f"saved_model/g_model_name.h5"
     d_model_path = f"saved_model/d_model_name.h5"
     
-train_data_path = f"data/{DATABASE_NAME}/train_data"
-eval_data_path = f"data/{DATABASE_NAME}/eval_data"
-test_data_path = f"data/{DATABASE_NAME}/test_data"
+train_data_path = f"data/{DATASET_NAME}/train_data"
+eval_data_path = f"data/{DATASET_NAME}/eval_data"
+test_data_path = f"data/{DATASET_NAME}/test_data"
 
 
 # In[ ]:
@@ -309,13 +317,14 @@ def plot_anomaly_score(score_ano, labels, name, model_name):
 # In[ ]:
 
 
-def enhance_image(image, beta=0.1):
-    image = tf.cast(image, tf.float64)
-    image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
-    # image = ((1 + beta) * image) + (-beta * np.mean(image))
-    return image
+def get_number_by_percentage(percentage, whole):
+    return math.ceil(float(percentage)/100 * float(whole))
 
-def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MAX", middle_rows=False):
+"""
+input: array [[path_of_file <string>, label <int>]]
+output: array of path [path_of_file <string>] & array of label [label <int>]
+"""
+def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MAX", composition={}):
     # images_path_array = glob(images_path)
     final_image_path = []
     final_label = []
@@ -333,7 +342,7 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
             "image_path": img_path,
             "mean": image.mean(),
             "std": image.std(),
-            "class": int(label)
+            "class": label
         }
         # print(data_row)
         return data_row
@@ -346,61 +355,63 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
     df_analysis = pd.DataFrame(columns=['image_path','mean','std', 'class'])
     
     # multiple processing calculating std
-    # print(images_path_array)
-    # start_time = datetime.now()
     
     pool = mp.Pool(5)
     data_rows = pool.map(processing_image, images_path_array)
     
-    # do your work here
-    # end_time = datetime.now()
-    # print(f'(selecting_images_preprocessing) Duration of counting std and mean of images: {end_time - start_time}')
-    # print(data_rows)
     df_analysis = df_analysis.append(data_rows, ignore_index = True)
-    # counter += 1
-    # if counter % 100 == 0:
-    #     print("processed image: ", counter)
             
-    final_df = df_analysis.sort_values(['std', 'mean'], ascending = [False, False])
+    final_df = df_analysis.sort_values(['std', 'mean'], ascending = [True, False])
     
-    # print(len(final_df))
-    if middle_rows:
-        print("get data from middle row")
-        n = len(final_df.index)
-        # print(n)
-        mid_n = round(n/2)
-        mid_k = round(limit_image_to_train/2)
-
-
-        start = mid_n - mid_k
-        end = mid_n + mid_k
-        # print(start, end)
-        final = final_df.iloc[start:end]
-        # print(final)
-        final_image_path = final['image_path'].head(limit_image_to_train).tolist()
-        final_label = final['class'].head(limit_image_to_train).tolist()
+    if composition == {}:
+        final_df = shuffle(final_df)
+        final_image_path = final_df['image_path'].head(limit_image_to_train).tolist()
+        final_label = final_df['class'].head(limit_image_to_train).tolist()
     else:
-        print("get data from top bottom row")
-        val = limit_image_to_train/2
-        first = math.floor(val)
-        second = math.ceil(val)
-        
-        # top & bottom
-        # final_image_path = final_df['image_path'].head(first).tolist() + final_df['image_path'].tail(second).tolist()
-        # final_label = final_df['class'].head(first).tolist() + final_df['class'].tail(second).tolist()
-                
-        # top & mid
-        n = len(final_df.index)
-        mid_n = round(n/2)
-        mid_k = round(second/2)
+        counter_available_no_data = limit_image_to_train
+        if composition.get('top') != 0:
+            num_rows = get_number_by_percentage(composition.get('top'), limit_image_to_train)
+            if counter_available_no_data <= num_rows:
+                num_rows = counter_available_no_data
+            counter_available_no_data = counter_available_no_data - num_rows
+            
+            print(composition.get('top'), num_rows, counter_available_no_data)
+            
+            # get top data
+            final_image_path = final_image_path + final_df['image_path'].head(num_rows).tolist()
+            final_label = final_label + final_df['class'].head(num_rows).tolist()
+            
+        if composition.get('mid') != 0:
+            num_rows = get_number_by_percentage(composition.get('mid'), limit_image_to_train)
+            if counter_available_no_data <= num_rows:
+                num_rows = counter_available_no_data
+            counter_available_no_data = counter_available_no_data - num_rows
+            
+            print(composition.get('mid'), num_rows, counter_available_no_data)
+            
+            # top & mid
+            n = len(final_df.index)
+            mid_n = round(n/2)
+            mid_k = round(num_rows/2)
 
-        start = mid_n - mid_k
-        end = mid_n + mid_k
-        
-        final = final_df.iloc[start:end]
-        
-        final_image_path = final_df['image_path'].head(first).tolist() + final['image_path'].head(second).tolist()
-        final_label = final_df['class'].head(first).tolist() + final['class'].head(second).tolist()
+            start = mid_n - mid_k
+            end = mid_n + mid_k
+
+            final = final_df.iloc[start:end]
+            final_image_path = final_image_path + final['image_path'].head(num_rows).tolist()
+            final_label = final_label + final['class'].head(num_rows).tolist()
+            
+        if composition.get('bottom') != 0:
+            num_rows = get_number_by_percentage(composition.get('bottom'), limit_image_to_train)
+            if counter_available_no_data <= num_rows:
+                num_rows = counter_available_no_data
+            counter_available_no_data = counter_available_no_data - num_rows
+            
+            print(composition.get('bottom'), num_rows, counter_available_no_data)
+            
+            # get bottom data
+            final_image_path = final_image_path + final_df['image_path'].tail(num_rows).tolist()
+            final_label = final_label + final_df['class'].tail(num_rows).tolist()
     
     
     # clear zombies memory
@@ -409,8 +420,17 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
     
     # print(final_image_path, final_label)
     # print(len(final_image_path), len(final_label))
-    final_label = list(map(int, final_label))
     return final_image_path, final_label
+
+
+# In[ ]:
+
+
+def enhance_image(image, beta=0.1):
+    image = tf.cast(image, tf.float64)
+    image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
+    # image = ((1 + beta) * image) + (-beta * np.mean(image))
+    return image
 
 def sliding_crop_and_select_one(img, stepSize=stSize, windowSize=winSize):
     current_std = 0
@@ -529,7 +549,7 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
             '''
             combined = np.transpose((path_list, class_list))
             # print(combined)
-            path_list, class_list = selecting_images_preprocessing(combined, limit_image_to_train=n_samples, middle_rows=False)
+            path_list, class_list = selecting_images_preprocessing(combined, limit_image_to_train=n_samples, composition=PERCENTAGE_COMPOSITION_DATASET)
         
         else:
             ''' 
@@ -546,23 +566,8 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
 
 def prep_stage(x, train=True):
     beta_contrast = 0.1
-    
-    # apply sobel
-    # k_size = 3 
-    
-    # if PREPRO == "sobelx":
-    #     x = cv2.Sobel(x, cv2.CV_32F, 1, 0,ksize=k_size)
-    # elif PREPRO == "sobely":
-    #     x = cv2.Sobel(x, cv2.CV_32F, 0, 1,ksize=k_size)
-    # elif PREPRO == "sobelxy":
-    #     x = cv2.Sobel(x, cv2.CV_32F, 1, 1,ksize=k_size) 
-        
     # enchance the brightness
     x = enhance_image(x, beta_contrast)
-    
-    # x = tf.image.convert_image_dtype(x, tf.float32)
-    
-    
     # if train:
         # x = enhance_image(x, beta_contrast)
         # x = tfa.image.equalize(x)
@@ -571,6 +576,7 @@ def prep_stage(x, train=True):
         # x = enhance_image(x, beta_contrast)
         # x = tfa.image.equalize(x)
         # x = custom_v3(x)
+        
     return x
 
 def post_stage(x):
@@ -694,41 +700,18 @@ class Dataset:
         self.data = {}
         class_names = ["normal"] if training else ["normal", "defect"]
         filenames, labels = read_data_with_labels(path_file, class_names, training, limit)
-        # print(filenames)
-        # print(labels)
-        # self.ds_ = zip(filenames, labels)
         
         ds = tf.data.Dataset.from_tensor_slices((filenames, labels))
         self.ds = ds.shuffle(buffer_size=1024, seed=random.randint(123, 10000) )
-        
-        
+             
         if training:
             for image, label in ds.map(extraction):
-                
                 image = image.numpy()
                 label = str(label.numpy())
-                
                 if label not in self.data:
                     self.data[label] = []
-                    
                 self.data[label].append(image)
-                
             self.labels = list(self.data.keys())
-            
-            
-#             for image, label in self.ds_:
-#                 # print(image, label)
-#                 image, label = extraction(image, label)
-#                 # image = image
-#                 # label = str(label.numpy())
-                
-#                 if label not in self.data:
-                    
-#                     self.data[label] = []
-                    
-#                 self.data[label].append(image)
-                
-#             self.labels = list(self.data.keys())
             
         end_time = datetime.now()
         
@@ -779,15 +762,6 @@ class Dataset:
         return dataset
     
     def get_dataset(self, batch_size):
-        # images = []
-        # labels = []
-        # for image, label in self.ds_:
-        #     image, label = extraction_test(image, label)
-        #     image = image
-        #     label = str(label)
-        #     images.append(image)
-        #     labels.append(label)
-            
         ds = self.ds.map(extraction_test, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         # ds = tf.data.Dataset.from_tensor_slices((images, labels))
         ds = ds.batch(batch_size)
@@ -850,16 +824,14 @@ def calculate_a_score(out_g_model, out_d_model, images):
 def conv_block_2nd(input, num_filters):
     x = Conv2D(num_filters, 3, padding="same")(input)
     x = BatchNormalization()(x)
-    # x = Activation("relu")(x)
-    x = Activation(tf.nn.leaky_relu)(x)
+    x = Activation("relu")(x)
+    # x = Activation(tf.nn.leaky_relu)(x)
  
-
     x = Conv2D(num_filters, 3, padding="same")(x)
     x = BatchNormalization()(x)
-    # x = Activation("relu")(x)
-    x = Activation(tf.nn.leaky_relu)(x)
-
-
+    x = Activation("relu")(x)
+    # x = Activation(tf.nn.leaky_relu)(x)
+    
     return x
 
 def decoder_block(input, skip_features, num_filters):
@@ -887,13 +859,13 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
 
     x = Conv2D(filters1, (1, 1), use_bias=False, name=conv_name_base + '_x1')(input_tensor)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x1_bn')(x)
-    # x = Activation('relu', name=relu_name_base + '_x1')(x)
-    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
+    x = Activation('relu', name=relu_name_base + '_x1')(x)
+    # x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
 
     x = Conv2D(filters2, kernel_size, padding='same', use_bias=False, name=conv_name_base + '_x2')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x2_bn')(x)
-    # x = Activation('relu', name=relu_name_base + '_x2')(x)
-    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
+    x = Activation('relu', name=relu_name_base + '_x2')(x)
+    # x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
 
     x = Conv2D(filters3, (1, 1), use_bias=False, name=conv_name_base + '_x3')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
@@ -905,8 +877,8 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
     x = Multiply(name='scale' + block_name)([x, se])
 
     x = add([x, input_tensor], name='block_' + block_name + '_x4')
-    # x = Activation('relu', name='block_out_' + block_name + '_x4')(x)
-    x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name + '_x4')(x)
+    x = Activation('relu', name='block_out_' + block_name + '_x4')(x)
+    # x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name + '_x4')(x)
     return x
 
 
@@ -924,13 +896,13 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2))
 
     x = Conv2D(filters1, (1, 1), use_bias=False, name=conv_name_base + '_x1')(input_tensor)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x1_bn')(x)
-    # x = Activation('relu', name=relu_name_base + '_x1')(x)
-    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
+    x = Activation('relu', name=relu_name_base + '_x1')(x)
+    # x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
 
     x = Conv2D(filters2, kernel_size, strides=strides, padding='same', use_bias=False, name=conv_name_base + '_x2')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x2_bn')(x)
-    # x = Activation('relu', name=relu_name_base + '_x2')(x)
-    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
+    x = Activation('relu', name=relu_name_base + '_x2')(x)
+    # x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
 
     x = Conv2D(filters3, (1, 1), use_bias=False, name=conv_name_base + '_x3')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
@@ -945,8 +917,8 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2))
     shortcut = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_prj_bn')(shortcut)
 
     x = add([x, shortcut], name='block_' + block_name)
-    # x = Activation('relu', name='block_out_' + block_name)(x)
-    x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name)(x)
+    x = Activation('relu', name='block_out_' + block_name)(x)
+    # x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name)(x)
     return x
 
 
@@ -980,8 +952,8 @@ def SEResNet50(include_top=True, weights='imagenet',
     # x = ZeroPadding2D(padding=(2, 2), name='conv1_pad')(img_input)
     x = Conv2D(64, (7, 7), strides=(2, 2), padding='same', use_bias=False, name='conv1')(img_input)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name='conv1_bn')(x)
-    # x = Activation('relu', name='conv1_relu')(x)
-    x = Activation(tf.nn.leaky_relu, name='conv1_relu')(x)
+    x = Activation('relu', name='conv1_relu')(x)
+    # x = Activation(tf.nn.leaky_relu, name='conv1_relu')(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='conv1_pool')(x)
     # x = ZeroPadding2D(padding=(1, 1), name='conv1_pad')(x)
     
@@ -1070,13 +1042,13 @@ def build_discriminator(inputs):
     features = []
     for i in range(0, num_layers):
         if i == 0:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             # x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
         
         else:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (4, 4), strides=(2, 2), padding='same')(x)
+            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
             x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
             x = tf.keras.layers.BatchNormalization()(x)
             x = tf.keras.layers.LeakyReLU(0.2)(x)
@@ -1184,11 +1156,11 @@ d_model = build_discriminator(inputs)
 # grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
 d_model.compile()
 g_model.compile()
-# g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
-# d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
@@ -1282,7 +1254,7 @@ if TRAIN:
     best_auc = 0.84
     
     start_time = datetime.now()
-    for meta_iter in range(meta_iters):
+    for meta_iter in tqdm(range(meta_iters), desc=f'training process'):
         frac_done = meta_iter / meta_iters
         cur_meta_step_size = (1 - frac_done) * meta_step_size
         # Temporarily save the weights from the model.
@@ -1387,7 +1359,6 @@ if TRAIN:
             # save model's weights
             g_model.save(g_model_path)
             d_model.save(d_model_path)
-    
     
     end_time = datetime.now()
     print(f'Duration of Training: {end_time - start_time}')
