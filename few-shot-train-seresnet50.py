@@ -51,18 +51,20 @@ IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.
 winSize = (256, 256)
 stSize = 20
+
 # Weight initializers for the Generator network
 # WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
+
 AUTOTUNE = tf.data.AUTOTUNE
-
-
 
 LIMIT_EVAL_IMAGES = 100
 LIMIT_TEST_IMAGES = "MAX"
 LIMIT_TRAIN_IMAGES = 100
 
+NUMBER_IMAGES_SELECTED = 1000
+
 # range between 0-1
-anomaly_weight = 0.7
+anomaly_weight = 0.9
 learning_rate = 0.002
 meta_step_size = 0.25
 
@@ -70,8 +72,8 @@ inner_batch_size = 25
 eval_batch_size = 25
 
 meta_iters = 2000
-inner_iters = 4
-
+inner_iters = 5
+no_datasets = 0 # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
 train_shots = 100
 shots = 20
 classes = 1
@@ -89,7 +91,7 @@ if IMG_C == 1:
     mode_colour = str(IMG_H) + "_gray"
 
 model_type = "seresnet50"
-name_model = f"{mode_colour}_{DATABASE_NAME}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
+name_model = f"{mode_colour}_{DATABASE_NAME}_{no_datasets}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
 g_model_path = f"saved_model/{name_model}_g_model.h5"
 d_model_path = f"saved_model/{name_model}_d_model.h5"
 
@@ -130,7 +132,6 @@ class MultiFeatureLoss(tf.keras.losses.Loss):
         super().__init__(reduction=reduction, name=name)
         self.mse_func = tf.keras.losses.MeanSquaredError() 
 
-    
     def call(self, real, fake, weight=1):
         result = 0.0
         for r, f in zip(real, fake):
@@ -145,7 +146,6 @@ class AdversarialLoss(tf.keras.losses.Loss):
              name='AdversarialLoss'):
         super().__init__(reduction=reduction, name=name)
 
-    
     def call(self, logits_in, labels_in):
         labels_in = tf.convert_to_tensor(labels_in)
         logits_in = tf.cast(logits_in, labels_in.dtype)
@@ -270,11 +270,7 @@ def plot_confusion_matrix(cm, classes,
     plt.savefig(title+'_cm.png')
     plt.show()
     plt.clf()
-
-
-# In[ ]:
-
-
+    
 def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.plot(iters, loss, colour, label=name)
 #     plt.plot(epochs, disc_loss, 'b', label='Discriminator loss')
@@ -307,7 +303,11 @@ def plot_anomaly_score(score_ano, labels, name, model_name):
     plt.savefig(model_name+ '_'+name+'_anomay_scores_dist.png')
     plt.show()
     plt.clf()
-    
+
+
+# In[ ]:
+
+
 def enhance_image(image, beta=0.1):
     image = tf.cast(image, tf.float64)
     image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
@@ -360,7 +360,7 @@ def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MA
     # if counter % 100 == 0:
     #     print("processed image: ", counter)
             
-    final_df = df_analysis.sort_values(['std', 'mean'], ascending = [True, False])
+    final_df = df_analysis.sort_values(['std', 'mean'], ascending = [False, False])
     
     # print(len(final_df))
     if middle_rows:
@@ -491,8 +491,19 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
         class_num = class_names.index(class_n)  # get the classification  (0 or a 1). 0=dog 1=cat
         path_list = []
         class_list = []
-        for img in tqdm(os.listdir(path)):  
+        
+        list_path = natsort.natsorted(os.listdir(path))
+        newarr_list_path = np.array_split(list_path, len(list_path)/NUMBER_IMAGES_SELECTED)
+        print("total number of dataset", len(list_path))
+        
+        print("number of sub dataset", len(newarr_list_path))
+        
+        list_path = newarr_list_path[no_datasets]
+        print("data taken from dataset", len(list_path))
+        
+        for img in tqdm(list_path, desc='selecting images'):  
             if ".DS_Store" != img:
+                # print(img)
                 filpath = os.path.join(path,img)
 #                 print(filpath, class_num)
                 
@@ -511,6 +522,7 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
             selecting by attribute of image
             '''
             combined = np.transpose((path_list, class_list))
+            # print(combined)
             path_list, class_list = selecting_images_preprocessing(combined, limit_image_to_train=n_samples, middle_rows=False)
         
         else:
@@ -522,7 +534,7 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
         image_list = image_list + path_list
         label_list = label_list + class_list
   
-    print("number of data processed", len(image_list))
+    # print(image_list, label_list)
     
     return image_list, label_list
 
@@ -566,8 +578,6 @@ def post_stage(x):
     # img /= 255.0
     return x
 
-
-
 def extraction(image, label):
     # This function will shrink the Omniglot images to the desired size,
     # scale pixel values and convert the RGB image to grayscale
@@ -583,7 +593,6 @@ def extraction(image, label):
     img = post_stage(img)
 
     return img, label
-
 
 def extraction_test(image, label):
     # This function will shrink the Omniglot images to the desired size,
@@ -1095,7 +1104,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     ssim_loss_list = []
     counter = 0
     
-    for images, labels in test_ds:
+    for images, labels in tqdm(test_ds, desc='testing stages'):
         loss_rec, loss_feat = 0.0, 0.0
         score = 0
         
@@ -1242,7 +1251,6 @@ def train_step(real_images):
         # loss_feat = mse(feature_real, feature_fake)
         loss_feat = multimse(feature_real, feature_fake, FEAT_REG_RATE_LF)
 
-
         gen_loss = tf.reduce_mean( 
             (loss_gen_ra * ADV_REG_RATE_LF) 
             + (loss_rec * REC_REG_RATE_LF) 
@@ -1318,18 +1326,17 @@ if TRAIN:
 
             scores_ano = []
             real_label = []
-            counter = 0
+            # counter = 0
            
-            for images, labels in eval_ds:
+            for images, labels in tqdm(eval_ds, desc='evalutions stages'):
 
                 loss_rec, loss_feat = 0.0, 0.0
                 score = 0
-                counter += 1
-
+                # counter += 1
+                
                 '''for normal'''
                 # temp_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, images)
                 # score = temp_score.numpy()
-
 
                 '''for Sliding Images & LR Crop'''
                 for image in images:
@@ -1341,8 +1348,8 @@ if TRAIN:
                     
                 scores_ano = np.append(scores_ano, score)
                 real_label = np.append(real_label, labels.numpy()[0])
-                if (counter % 100) == 0:
-                    print(counter, " tested.")
+                # if (counter % 100) == 0:
+                #     print(counter, " tested.")
             # print("scores_ano:", scores_ano)
             '''Scale scores vector between [0, 1]'''
             scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
@@ -1371,6 +1378,7 @@ if TRAIN:
                 g_model.save(best_g_model_path)
                 d_model.save(best_d_model_path)
                 best_auc = auc_out
+                
             # save model's weights
             g_model.save(g_model_path)
             d_model.save(d_model_path)
