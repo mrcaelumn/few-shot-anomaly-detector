@@ -1199,7 +1199,6 @@ REC_REG_RATE_LF = 50
 SSIM_REG_RATE_LF = 10
 FEAT_REG_RATE_LF = 1
 
-
 gen_loss_list = []
 disc_loss_list = []
 iter_list = []
@@ -1334,7 +1333,7 @@ if TRAIN:
             real_label = []
             # counter = 0
            
-            for images, labels in tqdm(eval_ds, desc='evalutions stages'):
+            for images, labels in tqdm(eval_ds, desc=f'evalution stage at {meta_iter} batch'):
 
                 loss_rec, loss_feat = 0.0, 0.0
                 score = 0
