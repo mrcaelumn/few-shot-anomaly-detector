@@ -90,10 +90,6 @@ PERCENTAGE_COMPOSITION_DATASET = {
     "mid": 40,
     "bottom": 10
 }
-# METHOD_SLICE_DATA = 5 # 0=mid, 1=top, 2=bottom, 3=top-bottom, 4=top-mid, 5=bottom-mid
-# PREPRO = "sobely"
-# eval_dataset_name = "mura"
-# test_dataset_name = "mura"
 
 mode_colour = str(IMG_H) + "_rgb"
 if IMG_C == 1:
