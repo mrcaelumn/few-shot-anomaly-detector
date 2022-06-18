@@ -494,13 +494,18 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
         class_list = []
         
         list_path = natsort.natsorted(os.listdir(path))
-        newarr_list_path = np.array_split(list_path, len(list_path)/NUMBER_IMAGES_SELECTED)
-        print("total number of dataset", len(list_path))
         
-        print("number of sub dataset", len(newarr_list_path))
+        if training:
+            print("total number of dataset", len(list_path))
+
+            newarr_list_path = np.array_split(list_path, math.ceil(len(list_path)/NUMBER_IMAGES_SELECTED))
+
+            print("number of sub dataset", len(newarr_list_path))
+
+            list_path = newarr_list_path[no_datasets]
+
+            print("data taken from dataset", len(list_path))
         
-        list_path = newarr_list_path[no_datasets]
-        print("data taken from dataset", len(list_path))
         
         for img in tqdm(list_path, desc='selecting images'):  
             if ".DS_Store" != img:
