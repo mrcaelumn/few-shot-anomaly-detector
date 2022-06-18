@@ -518,7 +518,7 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
 
             print("number of sub dataset", len(newarr_list_path))
 
-            list_path = newarr_list_path[no_datasets]
+            list_path = newarr_list_path[NO_DATASET]
 
             print("data taken from dataset", len(list_path))
         
