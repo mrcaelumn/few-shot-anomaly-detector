@@ -1108,13 +1108,13 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     rec_loss_list = []
     feat_loss_list = []
     ssim_loss_list = []
-    counter = 0
+    # counter = 0
     
     for images, labels in tqdm(test_ds, desc='testing stages'):
         loss_rec, loss_feat = 0.0, 0.0
         score = 0
         
-        counter += 1
+        # counter += 1
         '''for normal'''
         # temp_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, images)
         # score = temp_score.numpy()
@@ -1134,8 +1134,8 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         
         rec_loss_list = np.append(rec_loss_list, loss_rec)
         feat_loss_list = np.append(feat_loss_list, loss_feat)
-        if (counter % 100) == 0:
-            print(counter, " tested.")
+        # if (counter % 100) == 0:
+        #     print(counter, " tested.")
     ''' Scale scores vector between [0, 1]'''
     scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
     
