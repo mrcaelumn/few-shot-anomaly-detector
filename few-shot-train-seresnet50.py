@@ -751,7 +751,7 @@ class Dataset:
         dataset = tf.data.Dataset.from_tensor_slices(
             (temp_images.astype(np.float32), temp_labels.astype(np.int32))
         )
-        dataset = dataset.shuffle(100).batch(batch_size).repeat(repetitions)
+        dataset = dataset.shuffle(100, seed=datetime.now().timestamp()).batch(batch_size).repeat(repetitions)
         
         if split:
             return dataset, test_images, test_labels
@@ -855,13 +855,13 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
 
     x = Conv2D(filters1, (1, 1), use_bias=False, name=conv_name_base + '_x1')(input_tensor)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x1_bn')(x)
-    x = Activation('relu', name=relu_name_base + '_x1')(x)
-    # x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
+    # x = Activation('relu', name=relu_name_base + '_x1')(x)
+    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
 
     x = Conv2D(filters2, kernel_size, padding='same', use_bias=False, name=conv_name_base + '_x2')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x2_bn')(x)
-    x = Activation('relu', name=relu_name_base + '_x2')(x)
-    # x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
+    # x = Activation('relu', name=relu_name_base + '_x2')(x)
+    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
 
     x = Conv2D(filters3, (1, 1), use_bias=False, name=conv_name_base + '_x3')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
@@ -873,8 +873,8 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
     x = Multiply(name='scale' + block_name)([x, se])
 
     x = add([x, input_tensor], name='block_' + block_name + '_x4')
-    x = Activation('relu', name='block_out_' + block_name + '_x4')(x)
-    # x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name + '_x4')(x)
+    # x = Activation('relu', name='block_out_' + block_name + '_x4')(x)
+    x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name + '_x4')(x)
     return x
 
 
@@ -892,13 +892,13 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2))
 
     x = Conv2D(filters1, (1, 1), use_bias=False, name=conv_name_base + '_x1')(input_tensor)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x1_bn')(x)
-    x = Activation('relu', name=relu_name_base + '_x1')(x)
-    # x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
+    # x = Activation('relu', name=relu_name_base + '_x1')(x)
+    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
 
     x = Conv2D(filters2, kernel_size, strides=strides, padding='same', use_bias=False, name=conv_name_base + '_x2')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x2_bn')(x)
-    x = Activation('relu', name=relu_name_base + '_x2')(x)
-    # x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
+    # x = Activation('relu', name=relu_name_base + '_x2')(x)
+    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
 
     x = Conv2D(filters3, (1, 1), use_bias=False, name=conv_name_base + '_x3')(x)
     x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
@@ -913,8 +913,8 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2))
     shortcut = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_prj_bn')(shortcut)
 
     x = add([x, shortcut], name='block_' + block_name)
-    x = Activation('relu', name='block_out_' + block_name)(x)
-    # x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name)(x)
+    # x = Activation('relu', name='block_out_' + block_name)(x)
+    x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name)(x)
     return x
 
 
