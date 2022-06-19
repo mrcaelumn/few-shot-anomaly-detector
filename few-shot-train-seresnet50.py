@@ -751,7 +751,7 @@ class Dataset:
         dataset = tf.data.Dataset.from_tensor_slices(
             (temp_images.astype(np.float32), temp_labels.astype(np.int32))
         )
-        dataset = dataset.shuffle(100, seed=datetime.now().timestamp()).batch(batch_size).repeat(repetitions)
+        dataset = dataset.shuffle(100, seed=int(round(datetime.now().timestamp()))).batch(batch_size).repeat(repetitions)
         
         if split:
             return dataset, test_images, test_labels
