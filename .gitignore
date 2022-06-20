@@ -5,4 +5,5 @@
 !.gitignore
 !*.py
 !*.ipynb
-!*.md 
+!*.md
+!*.sh
