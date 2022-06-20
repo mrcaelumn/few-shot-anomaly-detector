@@ -44,6 +44,19 @@ from keras import backend as K
 # In[ ]:
 
 
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+
+# Parse command line arguments
+parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
+parser.add_argument("-dn", "--DATASET_NAME", default="mura", help="name of dataset in data directory.")
+parser.add_argument("-s", "--shots", default=20, type=int, help="how many data that you want to use.")
+parser.add_argument("-nd", "--NO_DATASET", default=0, type=int, help="select which number of dataset.")
+args = vars(parser.parse_args())
+
+
+# In[ ]:
+
+
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 ORI_SIZE = (271, 481)
@@ -62,6 +75,9 @@ LIMIT_EVAL_IMAGES = 100
 LIMIT_TEST_IMAGES = "MAX"
 LIMIT_TRAIN_IMAGES = 100
 
+TRAINING_DURATION = None
+TESTING_DURATION = None
+
 NUMBER_IMAGES_SELECTED = 1000
 
 # range between 0-1
@@ -76,15 +92,20 @@ eval_batch_size = 25
 meta_iters = 2000
 inner_iters = 4
 
+
 train_shots = 100
-shots = 20
+# shots = 20
+shots = args["shots"]
 classes = 1
 n_shots = shots
 if shots > 20 :
     n_shots = "few"
     
-DATASET_NAME = "mura"
-NO_DATASET = 0 # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
+# DATASET_NAME = "mura"
+DATASET_NAME = args["DATASET_NAME"]
+# NO_DATASET = 0 # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
+NO_DATASET = args["NO_DATASET"] # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
+
 PERCENTAGE_COMPOSITION_DATASET = {
     "top": 50,
     "mid": 40,
@@ -100,7 +121,7 @@ name_model = f"{mode_colour}_{DATASET_NAME}_{NO_DATASET}_{model_type}_{n_shots}_
 g_model_path = f"saved_model/{name_model}_g_model.h5"
 d_model_path = f"saved_model/{name_model}_d_model.h5"
 
-TRAIN = True
+TRAIN = False
 if not TRAIN:
     g_model_path = f"saved_model/g_model_name.h5"
     d_model_path = f"saved_model/d_model_name.h5"
@@ -108,6 +129,8 @@ if not TRAIN:
 train_data_path = f"data/{DATASET_NAME}/train_data"
 eval_data_path = f"data/{DATASET_NAME}/eval_data"
 test_data_path = f"data/{DATASET_NAME}/test_data"
+
+# print(name_model)
 
 
 # In[ ]:
@@ -308,6 +331,10 @@ def plot_anomaly_score(score_ano, labels, name, model_name):
     plt.savefig(model_name+ '_'+name+'_anomay_scores_dist.png')
     plt.show()
     plt.clf()
+
+def write_result(array_lines, name):
+    with open(f'{name}.txt', 'w+') as f:
+        f.write('\n'.join(array_lines))
 
 
 # In[ ]:
@@ -1128,15 +1155,29 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
 
     diagonal_sum = cm.trace()
     sum_of_all_elements = cm.sum()
-
-    print("Accuracy: ", diagonal_sum / sum_of_all_elements )
-    print("False Alarm Rate (FPR): ", FP/(FP+TN))
-    print("Leakage Rat (FNR): ", FN/(FN+TP))
-    print("TNR: ", TN/(FP+TN))
-    print("precision_score: ", TP/(TP+FP))
-    print("recall_score: ", TP/(TP+FN))
-    print("NPV: ", TN/(FN+TN))
-    print("F1-Score: ", f1_score(real_label, scores_ano))
+    arr_result = [
+        f"Accuracy: {(diagonal_sum / sum_of_all_elements)}",
+        f"False Alarm Rate (FPR): {(FP/(FP+TN))}", 
+        f"TNR: {(TN/(FP+TN))}", 
+        f"Precision Score (PPV): {(TP/(TP+FP))}", 
+        f"Recall Score (TPR): {(TP/(TP+FN))}", 
+        f"NPV: {(TN/(FN+TN))}", 
+        f"F1-Score: {(f1_score(real_label, scores_ano))}", 
+        f"Training Duration: {TRAINING_DURATION}"
+        f"Testing Duration: {TESTING_DURATION}"
+    ]
+    print("\n".join(arr_result))
+    
+    # print("Accuracy: ", diagonal_sum / sum_of_all_elements)
+    # print("False Alarm Rate (FPR): ", FP/(FP+TN))
+    # print("Leakage Rat (FNR): ", FN/(FN+TP))
+    # print("TNR: ", TN/(FP+TN))
+    # print("precision_score: ", TP/(TP+FP))
+    # print("recall_score: ", TP/(TP+FN))
+    # print("NPV: ", TN/(FN+TN))
+    # print("F1-Score: ", f1_score(real_label, scores_ano))
+    
+    write_result(arr_result, name_model)
 
 
 # In[ ]:
@@ -1357,6 +1398,7 @@ if TRAIN:
             d_model.save(d_model_path)
     
     end_time = datetime.now()
+    TRAINING_DURATION = end_time - start_time
     print(f'Duration of Training: {end_time - start_time}')
     """
     Train Ends
@@ -1374,6 +1416,7 @@ test_dataset = Dataset(test_data_path, training=False, limit=LIMIT_TEST_IMAGES)
 start_time = datetime.now()
 testing(g_model, d_model, g_model_path, d_model_path, test_dataset.get_dataset(1))
 end_time = datetime.now()
+TESTING_DURATION = end_time - start_time
 print(f'Duration of Testing: {end_time - start_time}')
 
 
