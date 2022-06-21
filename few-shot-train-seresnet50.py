@@ -1296,7 +1296,8 @@ if TRAIN:
     best_auc = 0.7
     
     start_time = datetime.now()
-    for meta_iter in tqdm(range(meta_iters), desc=f'training process'):
+    # for meta_iter in tqdm(range(meta_iters), desc=f'training process'):
+    for meta_iter in range(meta_iters):
         frac_done = meta_iter / meta_iters
         cur_meta_step_size = (1 - frac_done) * meta_step_size
         # Temporarily save the weights from the model.
