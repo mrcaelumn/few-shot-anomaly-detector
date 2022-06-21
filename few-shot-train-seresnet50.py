@@ -1093,7 +1093,7 @@ def build_discriminator(inputs):
 
 def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     class_names = ["normal", "defect"] # normal = 0, defect = 1
-    
+    start_time = datetime.now()
     g_model_inner.load_weights(g_filepath)
     d_model_inner.load_weights(d_filepath)
     
@@ -1155,7 +1155,12 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
 
     diagonal_sum = cm.trace()
     sum_of_all_elements = cm.sum()
+    
+    end_time = datetime.now()
+    TESTING_DURATION = end_time - start_time
+    print(f'Duration of Testing: {end_time - start_time}')
     arr_result = [
+        f"AUC: {auc_out}",
         f"Accuracy: {(diagonal_sum / sum_of_all_elements)}",
         f"False Alarm Rate (FPR): {(FP/(FP+TN))}", 
         f"TNR: {(TN/(FP+TN))}", 
@@ -1163,8 +1168,8 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         f"Recall Score (TPR): {(TP/(TP+FN))}", 
         f"NPV: {(TN/(FN+TN))}", 
         f"F1-Score: {(f1_score(real_label, scores_ano))}", 
-        f"Training Duration: {TRAINING_DURATION}"
-        f"Testing Duration: {TESTING_DURATION}"
+        f"Training Duration: {TRAINING_DURATION}",
+        # f"Testing Duration: {TESTING_DURATION}"
     ]
     print("\n".join(arr_result))
     
@@ -1412,12 +1417,7 @@ if TRAIN:
 
 
 test_dataset = Dataset(test_data_path, training=False, limit=LIMIT_TEST_IMAGES)
-
-start_time = datetime.now()
 testing(g_model, d_model, g_model_path, d_model_path, test_dataset.get_dataset(1))
-end_time = datetime.now()
-TESTING_DURATION = end_time - start_time
-print(f'Duration of Testing: {end_time - start_time}')
 
 
 # In[ ]:
