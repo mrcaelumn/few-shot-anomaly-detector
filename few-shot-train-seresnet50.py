@@ -1288,7 +1288,7 @@ def train_step(real_images):
 
 if TRAIN:
     print("Start Trainning. ", name_model)
-    best_auc = 0.84
+    best_auc = 0.7
     
     start_time = datetime.now()
     for meta_iter in tqdm(range(meta_iters), desc=f'training process'):
@@ -1424,4 +1424,10 @@ print(f'Duration of Testing: {end_time - start_time}')
 
 
 checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
+
+
+# In[ ]:
+
+
+gc.collect()
 
