@@ -72,7 +72,7 @@ stSize = 20
 AUTOTUNE = tf.data.AUTOTUNE
 
 LIMIT_EVAL_IMAGES = 100
-LIMIT_TEST_IMAGES = "MAX"
+LIMIT_TEST_IMAGES = 3000
 LIMIT_TRAIN_IMAGES = 100
 
 TRAINING_DURATION = None
@@ -121,7 +121,7 @@ name_model = f"{mode_colour}_{DATASET_NAME}_{NO_DATASET}_{model_type}_{n_shots}_
 g_model_path = f"saved_model/{name_model}_g_model.h5"
 d_model_path = f"saved_model/{name_model}_d_model.h5"
 
-TRAIN = False
+TRAIN = True
 if not TRAIN:
     g_model_path = f"saved_model/g_model_name.h5"
     d_model_path = f"saved_model/d_model_name.h5"
