@@ -7,4 +7,5 @@
 !*.ipynb
 !*.md
 !*.sh
+!requirements.txt
 !models/
