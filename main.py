@@ -5,9 +5,6 @@
 
 
 import tensorflow as tf
-import tensorflow_datasets as tfds
-import tensorflow_io as tfio
-import tensorflow_addons as tfa
 import itertools
 
 import os
@@ -16,17 +13,14 @@ from tqdm import tqdm
 import numpy as np
 import random
 import gc
-import multiprocess as mp
 import pandas as pd 
 
 from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score
 from sklearn.utils import shuffle
 
 from matplotlib import pyplot as plt
-import matplotlib.patches as mpatches
 import seaborn as sns
 from datetime import datetime
-import cv2
 import math
 import natsort
 
@@ -34,11 +28,15 @@ import natsort
 # In[ ]:
 
 
-from tensorflow.keras.layers import Conv2D, BatchNormalization, Activation, MaxPooling2D, MaxPool2D, GlobalAveragePooling2D, Conv2DTranspose, Concatenate, Input, Dense, Reshape, Multiply, add, Flatten, ZeroPadding2D
-from tensorflow.keras.models import Model
-from keras_applications.imagenet_utils import _obtain_input_shape
-from keras.utils.layer_utils import get_source_inputs
-from keras import backend as K
+from models.resnet50 import build_generator_resnet50_unet
+from models.seresnet50 import build_seresnet50_unet
+from models.seresnext50 import build_seresnext50_unet
+from models.discriminator import build_discriminator
+
+
+from models.custom_optimizers import GCAdam
+from models.loss_func import SSIMLoss, AdversarialLoss, MultiFeatureLoss
+from models.data_augmentation import selecting_images_preprocessing, sliding_crop     , sliding_crop_and_select_one, custom_v3, enhance_image
 
 
 # In[ ]:
@@ -49,8 +47,9 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 # Parse command line arguments
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("-dn", "--DATASET_NAME", default="mura", help="name of dataset in data directory.")
-parser.add_argument("-s", "--shots", default=20, type=int, help="how many data that you want to use.")
+parser.add_argument("-s", "--SHOTS", default=20, type=int, help="how many data that you want to use.")
 parser.add_argument("-nd", "--NO_DATASET", default=0, type=int, help="select which number of dataset.")
+parser.add_argument("-bb", "--BACKBONE", default="seresnet50", help="backbone model for generator's encoder. (resnet50, seresnet50, seresnext50)")
 args = vars(parser.parse_args())
 
 
@@ -81,7 +80,7 @@ TESTING_DURATION = None
 NUMBER_IMAGES_SELECTED = 1000
 
 # range between 0-1
-anomaly_weight = 0.7
+anomaly_weight = 0.1
 
 learning_rate = 0.002
 meta_step_size = 0.25
@@ -95,7 +94,7 @@ inner_iters = 4
 
 train_shots = 100
 # shots = 20
-shots = args["shots"]
+shots = args["SHOTS"]
 classes = 1
 n_shots = shots
 if shots > 20 :
@@ -116,69 +115,57 @@ mode_colour = str(IMG_H) + "_rgb"
 if IMG_C == 1:
     mode_colour = str(IMG_H) + "_gray"
 
-model_type = "seresnet50"
-name_model = f"{mode_colour}_{DATASET_NAME}_{NO_DATASET}_{model_type}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
+MODEL_BACKBONE = args["BACKBONE"]
+name_model = f"{mode_colour}_{DATASET_NAME}_{NO_DATASET}_{MODEL_BACKBONE}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
 g_model_path = f"saved_model/{name_model}_g_model.h5"
 d_model_path = f"saved_model/{name_model}_d_model.h5"
+plot_folder = "plot_output/"
+text_folder = "text_output/"
 
 TRAIN = True
 if not TRAIN:
-    g_model_path = f"saved_model/g_model_name.h5"
-    d_model_path = f"saved_model/d_model_name.h5"
+    g_model_path = "saved_model/g_model_name.h5"
+    d_model_path = "saved_model/d_model_name.h5"
     
 train_data_path = f"data/{DATASET_NAME}/train_data"
 eval_data_path = f"data/{DATASET_NAME}/eval_data"
 test_data_path = f"data/{DATASET_NAME}/test_data"
 
-# print(name_model)
-
 
 # In[ ]:
 
 
-# class for SSIM loss function
-class SSIMLoss(tf.keras.losses.Loss):
-    def __init__(self,
-         reduction=tf.keras.losses.Reduction.AUTO,
-         name='SSIMLoss'):
-        super().__init__(reduction=reduction, name=name)
+input_shape = (IMG_H, IMG_W, IMG_C)
+# set input 
+inputs = tf.keras.layers.Input(input_shape, name="input_1")
 
-    def call(self, ori, recon):
-        recon = tf.convert_to_tensor(recon)
-        ori = tf.cast(ori, recon.dtype)
+g_model = build_seresnet50_unet(input_shape, IMG_H, IMG_C)
+d_model = build_discriminator(inputs, IMG_H)
 
-        # Loss 3: SSIM Loss
-#         loss_ssim =  tf.reduce_mean(1 - tf.image.ssim(ori, recon, max_val=1.0)[0]) 
-        loss_ssim = tf.reduce_mean(1 - tf.image.ssim(ori, recon, max_val=IMG_W, filter_size=7, k1=0.01 ** 2, k2=0.03 ** 2))
-        return loss_ssim
+if args["BACKBONE"] == "resnet50":
     
-
-class MultiFeatureLoss(tf.keras.losses.Loss):
-    def __init__(self,
-             reduction=tf.keras.losses.Reduction.AUTO,
-             name='FeatureLoss'):
-        super().__init__(reduction=reduction, name=name)
-        self.mse_func = tf.keras.losses.MeanSquaredError() 
-
-    def call(self, real, fake, weight=1):
-        result = 0.0
-        for r, f in zip(real, fake):
-            result = result + (weight * self.mse_func(r, f))
-        
-        return result
+    print("backbone selected: resnet50")
+    g_model = build_generator_resnet50_unet(input_shape, IMG_H, IMG_C)
+elif args["BACKBONE"] == "seresnext50":
     
-# class for Adversarial loss function
-class AdversarialLoss(tf.keras.losses.Loss):
-    def __init__(self,
-             reduction=tf.keras.losses.Reduction.AUTO,
-             name='AdversarialLoss'):
-        super().__init__(reduction=reduction, name=name)
+    print("backbone selected: seresnext50")
+    g_model = build_seresnext50_unet(input_shape, IMG_H, IMG_C)
+else:
+    
+    print("backbone selected (default): seresnext50")
+    g_model = build_seresnet50_unet(input_shape, IMG_H, IMG_C)
+    
+# d_model.summary()
+# g_model.summary()
 
-    def call(self, logits_in, labels_in):
-        labels_in = tf.convert_to_tensor(labels_in)
-        logits_in = tf.cast(logits_in, labels_in.dtype)
-        # Loss 4: FEATURE Loss
-        return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=logits_in, labels=labels_in))
+d_model.compile()
+g_model.compile()
+
+g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+
+d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
@@ -191,7 +178,7 @@ def plot_roc_curve(fpr, tpr, name_model):
     plt.ylabel('True Positive Rate')
     plt.title('Receiver Operating Characteristic (ROC) Curve')
     plt.legend()
-    plt.savefig(name_model+'_roc_curve.png')
+    plt.savefig(plot_folder + name_model+'_roc_curve.png')
     plt.show()
     plt.clf()
 
@@ -224,26 +211,6 @@ mse = tf.keras.losses.MeanSquaredError()
 multimse = MultiFeatureLoss()
 # SSIM loss
 ssim = SSIMLoss()
-
-
-# In[ ]:
-
-
-class GCAdam(tf.keras.optimizers.Adam):
-    def get_gradients(self, loss, params):
-        # We here just provide a modified get_gradients() function since we are
-        # trying to just compute the centralized gradients.
-
-        grads = []
-        gradients = super().get_gradients()
-        for grad in gradients:
-            grad_len = len(grad.shape)
-            if grad_len > 1:
-                axis = list(range(grad_len - 1))
-                grad -= tf.reduce_mean(grad, axis=axis, keep_dims=True)
-            grads.append(grad)
-
-        return grads
 
 
 # In[ ]:
@@ -295,7 +262,7 @@ def plot_confusion_matrix(cm, classes,
     plt.tight_layout()
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
-    plt.savefig(title+'_cm.png')
+    plt.savefig(plot_folder + title+'_cm.png')
     plt.show()
     plt.clf()
     
@@ -306,7 +273,7 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
     plt.xlabel('Iters')
     plt.ylabel('Loss')
     plt.legend()
-    plt.savefig(model_name+ '_'+name+'_iters_result.png')
+    plt.savefig(plot_folder + model_name+ '_'+name+'_iters_result.png')
     plt.show()
     plt.clf()
 
@@ -328,199 +295,13 @@ def plot_anomaly_score(score_ano, labels, name, model_name):
     plt.xlabel('Anomaly Scores')
     plt.ylabel('Number of samples')
     plt.legend(prop={'size': 12})
-    plt.savefig(model_name+ '_'+name+'_anomay_scores_dist.png')
+    plt.savefig(plot_folder + model_name+ '_'+name+'_anomay_scores_dist.png')
     plt.show()
     plt.clf()
 
 def write_result(array_lines, name):
-    with open(f'{name}.txt', 'w+') as f:
+    with open(f'{text_folder}{name}.txt', 'w+') as f:
         f.write('\n'.join(array_lines))
-
-
-# In[ ]:
-
-
-def get_number_by_percentage(percentage, whole):
-    return math.ceil(float(percentage)/100 * float(whole))
-
-"""
-input: array [[path_of_file <string>, label <int>]]
-output: array of path [path_of_file <string>] & array of label [label <int>]
-"""
-def selecting_images_preprocessing(images_path_array, limit_image_to_train = "MAX", composition={}):
-    # images_path_array = glob(images_path)
-    final_image_path = []
-    final_label = []
-    def processing_image(img_data):
-        img_path = img_data[0]
-        label = img_data[1]
-        # print(img_path, label)
-        image = cv2.imread(img_path)
-        # print(image)
-        mean = np.mean(image)
-        std = np.std(image)
-        # print(mean, image.mean())
-        # print(std, image.std())
-        data_row = {
-            "image_path": img_path,
-            "mean": image.mean(),
-            "std": image.std(),
-            "class": label
-        }
-        # print(data_row)
-        return data_row
-    
-        
-    print("processed number of data: ", len(images_path_array))
-    if limit_image_to_train == "MAX":
-        limit_image_to_train = len(images_path_array)
-            
-    df_analysis = pd.DataFrame(columns=['image_path','mean','std', 'class'])
-    
-    # multiple processing calculating std
-    
-    pool = mp.Pool(5)
-    data_rows = pool.map(processing_image, images_path_array)
-    
-    df_analysis = df_analysis.append(data_rows, ignore_index = True)
-            
-    final_df = df_analysis.sort_values(['std', 'mean'], ascending = [True, False])
-    
-    if composition == {}:
-        final_df = shuffle(final_df)
-        final_image_path = final_df['image_path'].head(limit_image_to_train).tolist()
-        final_label = final_df['class'].head(limit_image_to_train).tolist()
-    else:
-        counter_available_no_data = limit_image_to_train
-        if composition.get('top') != 0:
-            num_rows = get_number_by_percentage(composition.get('top'), limit_image_to_train)
-            if counter_available_no_data <= num_rows:
-                num_rows = counter_available_no_data
-            counter_available_no_data = counter_available_no_data - num_rows
-            
-            print(composition.get('top'), num_rows, counter_available_no_data)
-            
-            # get top data
-            final_image_path = final_image_path + final_df['image_path'].head(num_rows).tolist()
-            final_label = final_label + final_df['class'].head(num_rows).tolist()
-            
-        if composition.get('mid') != 0:
-            num_rows = get_number_by_percentage(composition.get('mid'), limit_image_to_train)
-            if counter_available_no_data <= num_rows:
-                num_rows = counter_available_no_data
-            counter_available_no_data = counter_available_no_data - num_rows
-            
-            print(composition.get('mid'), num_rows, counter_available_no_data)
-            
-            # top & mid
-            n = len(final_df.index)
-            mid_n = round(n/2)
-            mid_k = round(num_rows/2)
-
-            start = mid_n - mid_k
-            end = mid_n + mid_k
-
-            final = final_df.iloc[start:end]
-            final_image_path = final_image_path + final['image_path'].head(num_rows).tolist()
-            final_label = final_label + final['class'].head(num_rows).tolist()
-            
-        if composition.get('bottom') != 0:
-            num_rows = get_number_by_percentage(composition.get('bottom'), limit_image_to_train)
-            if counter_available_no_data <= num_rows:
-                num_rows = counter_available_no_data
-            counter_available_no_data = counter_available_no_data - num_rows
-            
-            print(composition.get('bottom'), num_rows, counter_available_no_data)
-            
-            # get bottom data
-            final_image_path = final_image_path + final_df['image_path'].tail(num_rows).tolist()
-            final_label = final_label + final_df['class'].tail(num_rows).tolist()
-    
-    
-    # clear zombies memory
-    del [[final_df, df_analysis]]
-    gc.collect()
-    
-    # print(final_image_path, final_label)
-    # print(len(final_image_path), len(final_label))
-    return final_image_path, final_label
-
-
-# In[ ]:
-
-
-def enhance_image(image, beta=0.1):
-    image = tf.cast(image, tf.float64)
-    image = ((1 + beta) * image) + (-beta * tf.math.reduce_mean(image))
-    # image = ((1 + beta) * image) + (-beta * np.mean(image))
-    return image
-
-def sliding_crop_and_select_one(img, stepSize=stSize, windowSize=winSize):
-    current_std = 0
-    current_image = None
-    y_end_crop, x_end_crop = False, False
-    for y in range(0, ORI_SIZE[0], stepSize):
-        
-        y_end_crop = False
-        
-        for x in range(0, ORI_SIZE[1], stepSize):
-            
-            x_end_crop = False
-            
-            crop_y = y
-            if (y + windowSize[0]) > ORI_SIZE[0]:
-                crop_y =  ORI_SIZE[0] - windowSize[0]
-                y_end_crop = True
-            
-            crop_x = x
-            if (x + windowSize[1]) > ORI_SIZE[1]:
-                crop_x = ORI_SIZE[1] - windowSize[1]
-                x_end_crop = True
-                
-            image = tf.image.crop_to_bounding_box(img, crop_y, crop_x, windowSize[0], windowSize[1])                
-            std_image = tf.math.reduce_std(tf.cast(image, dtype=tf.float32))
-          
-            if current_std == 0 or std_image < current_std :
-                current_std = std_image
-                current_image = image
-                
-            if x_end_crop:
-                break
-                
-        if x_end_crop and y_end_crop:
-            break
-            
-    return current_image
-
-def sliding_crop(img, stepSize=stSize, windowSize=winSize):
-    current_std = 0
-    current_image = []
-    y_end_crop, x_end_crop = False, False
-    for y in range(0, ORI_SIZE[0], stepSize):
-        y_end_crop = False
-        for x in range(0, ORI_SIZE[1], stepSize):
-            x_end_crop = False
-            crop_y = y
-            if (y + windowSize[0]) > ORI_SIZE[0]:
-                crop_y =  ORI_SIZE[0] - windowSize[0]
-            
-            crop_x = x
-            if (x + windowSize[1]) > ORI_SIZE[1]:
-                crop_x = ORI_SIZE[1] - windowSize[1]
-            
-            # print(crop_y, crop_x, windowSize)
-            image = tf.image.crop_to_bounding_box(img, crop_y, crop_x, windowSize[0], windowSize[1])
-            current_image.append(image)
-            if x_end_crop:
-                break
-        if x_end_crop and y_end_crop:
-            break
-    return current_image
-
-def custom_v3(img):
-    img = tf.image.adjust_gamma(img)
-    img = tfa.image.median_filter2d(img, 3)
-    return img
 
 
 # In[ ]:
@@ -665,8 +446,6 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
     for i, v in paths.items():
         print(i,v)
 
-        width=IMG_W
-        height=IMG_H
         rows = 1
         cols = 3
         axes=[]
@@ -675,7 +454,6 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         
         img, label = extraction(v, i)
        
-        name_subplot = mode+'_original_'+i
         axes.append( fig.add_subplot(rows, cols, 1) )
         axes[-1].set_title('_original_')  
         
@@ -693,8 +471,6 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         reconstructed_images = g_model_inner.predict(image)
         reconstructed_images = tf.reshape(reconstructed_images, (IMG_H, IMG_W, IMG_C))
         reconstructed_images = reconstructed_images * 127 + 127
-
-        name_subplot = mode+'_reconstructed_'+i
         axes.append( fig.add_subplot(rows, cols, 3) )
         axes[-1].set_title('_reconstructed_') 
         
@@ -844,253 +620,6 @@ def calculate_a_score(out_g_model, out_d_model, images):
 # In[ ]:
 
 
-def conv_block_2nd(input, num_filters):
-    x = Conv2D(num_filters, 3, padding="same")(input)
-    x = BatchNormalization()(x)
-    x = Activation("relu")(x)
-    # x = Activation(tf.nn.leaky_relu)(x)
- 
-    x = Conv2D(num_filters, 3, padding="same")(x)
-    x = BatchNormalization()(x)
-    x = Activation("relu")(x)
-    # x = Activation(tf.nn.leaky_relu)(x)
-    
-    return x
-
-def decoder_block(input, skip_features, num_filters):
-    x = Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(input)
-    x = Concatenate()([x, skip_features])
-    x = conv_block_2nd(x, num_filters)
-    return x
-
-
-# In[ ]:
-
-
-def identity_block(input_tensor, kernel_size, filters, stage, block):
-    filters1, filters2, filters3 = filters
-    if K.image_data_format() == 'channels_last':
-        bn_axis = 3
-    else:
-        bn_axis = 1
-    bn_eps = 0.0001
-        
-    block_name = str(stage) + "_" + str(block)
-    conv_name_base = "conv" + block_name
-    relu_name_base = "relu" + block_name
-
-
-    x = Conv2D(filters1, (1, 1), use_bias=False, name=conv_name_base + '_x1')(input_tensor)
-    x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x1_bn')(x)
-    # x = Activation('relu', name=relu_name_base + '_x1')(x)
-    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
-
-    x = Conv2D(filters2, kernel_size, padding='same', use_bias=False, name=conv_name_base + '_x2')(x)
-    x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x2_bn')(x)
-    # x = Activation('relu', name=relu_name_base + '_x2')(x)
-    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
-
-    x = Conv2D(filters3, (1, 1), use_bias=False, name=conv_name_base + '_x3')(x)
-    x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
-
-    se = GlobalAveragePooling2D(name='pool' + block_name + '_gap')(x)
-    se = Dense(filters3 // 8, activation='relu', name = 'fc' + block_name + '_sqz')(se)
-    se = Dense(filters3, activation='sigmoid', name = 'fc' + block_name + '_exc')(se)
-    se = Reshape([1, 1, filters3])(se)
-    x = Multiply(name='scale' + block_name)([x, se])
-
-    x = add([x, input_tensor], name='block_' + block_name + '_x4')
-    # x = Activation('relu', name='block_out_' + block_name + '_x4')(x)
-    x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name + '_x4')(x)
-    return x
-
-
-def conv_block(input_tensor, kernel_size, filters, stage, block, strides=(2, 2)):
-    filters1, filters2, filters3 = filters
-    if K.image_data_format() == 'channels_last':
-        bn_axis = 3
-    else:
-        bn_axis = 1
-    bn_eps = 0.0001
-    
-    block_name = str(stage) + "_" + str(block)
-    conv_name_base = "conv" + block_name
-    relu_name_base = "relu" + block_name
-
-    x = Conv2D(filters1, (1, 1), use_bias=False, name=conv_name_base + '_x1')(input_tensor)
-    x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x1_bn')(x)
-    # x = Activation('relu', name=relu_name_base + '_x1')(x)
-    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x1')(x)
-
-    x = Conv2D(filters2, kernel_size, strides=strides, padding='same', use_bias=False, name=conv_name_base + '_x2')(x)
-    x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x2_bn')(x)
-    # x = Activation('relu', name=relu_name_base + '_x2')(x)
-    x = Activation(tf.nn.leaky_relu, name=relu_name_base + '_x2')(x)
-
-    x = Conv2D(filters3, (1, 1), use_bias=False, name=conv_name_base + '_x3')(x)
-    x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_x3_bn')(x)
-    
-    se = GlobalAveragePooling2D(name='pool' + block_name + '_gap')(x)
-    se = Dense(filters3 // 16, activation='relu', name = 'fc' + block_name + '_sqz')(se)
-    se = Dense(filters3, activation='sigmoid', name = 'fc' + block_name + '_exc')(se)
-    se = Reshape([1, 1, filters3])(se)
-    x = Multiply(name='scale' + block_name)([x, se])
-    
-    shortcut = Conv2D(filters3, (1, 1), strides=strides, use_bias=False, name=conv_name_base + '_prj')(input_tensor)
-    shortcut = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name=conv_name_base + '_prj_bn')(shortcut)
-
-    x = add([x, shortcut], name='block_' + block_name)
-    # x = Activation('relu', name='block_out_' + block_name)(x)
-    x = Activation(tf.nn.leaky_relu, name='block_out_' + block_name)(x)
-    return x
-
-
-def SEResNet50(include_top=True, weights='imagenet',
-               input_tensor=None, input_shape=None,
-               pooling=None,
-               classes=1000):
-
-    # Determine proper input shape
-    input_shape = _obtain_input_shape(input_shape,
-                                      default_size=225,
-                                      min_size=160,
-                                      data_format=K.image_data_format(),
-                                      require_flatten=include_top,
-                                      weights=weights)
-
-    if input_tensor is None:
-        img_input = Input(shape=input_shape, name="input_1")
-    else:
-        if not K.is_keras_tensor(input_tensor):
-            img_input = Input(tensor=input_tensor, shape=input_shape, name="input_1")
-        else:
-            img_input = input_tensor
-            
-    if K.image_data_format() == 'channels_last':
-        bn_axis = 3
-    else:
-        bn_axis = 1
-    bn_eps = 0.0001
-    
-    # x = ZeroPadding2D(padding=(2, 2), name='conv1_pad')(img_input)
-    x = Conv2D(64, (7, 7), strides=(2, 2), padding='same', use_bias=False, name='conv1')(img_input)
-    x = BatchNormalization(axis=bn_axis, epsilon=bn_eps, name='conv1_bn')(x)
-    x = Activation('relu', name='conv1_relu')(x)
-    # x = Activation(tf.nn.leaky_relu, name='conv1_relu')(x)
-    x = MaxPooling2D((2, 2), strides=(2, 2), name='conv1_pool')(x)
-    # x = ZeroPadding2D(padding=(1, 1), name='conv1_pad')(x)
-    
-    x = conv_block(x, 3, [64, 64, 256], stage=2, block=1, strides=(1, 1))
-    x = identity_block(x, 3, [64, 64, 256], stage=2, block=2)
-    x = identity_block(x, 3, [64, 64, 256], stage=2, block=3)
-
-    x = conv_block(x, 3, [128, 128, 512], stage=3, block=1)
-    x = identity_block(x, 3, [128, 128, 512], stage=3, block=2)
-    x = identity_block(x, 3, [128, 128, 512], stage=3, block=3)
-    x = identity_block(x, 3, [128, 128, 512], stage=3, block=4)
-
-    x = conv_block(x, 3, [256, 256, 1024], stage=4, block=1)
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block=2)
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block=3)
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block=4)
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block=5)
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block=6)
-
-    x = conv_block(x, 3, [512, 512, 2048], stage=5, block=1)
-    x = identity_block(x, 3, [512, 512, 2048], stage=5, block=2)
-    x = identity_block(x, 3, [512, 512, 2048], stage=5, block=3)
-
-    # x = Flatten()(x)
-    # x = Dense(classes, activation='softmax', name='fc6')(x)
-
-    # Ensure that the model takes into account
-    # any potential predecessors of `input_tensor`.
-    if input_tensor is not None:
-        inputs = get_source_inputs(input_tensor)
-    else:
-        inputs = img_input
-    # Create model.
-    model = Model(inputs, x, name='se-resnet50')
-    return model  
-
-
-# In[ ]:
-
-
-def build_seresnet50_unet(input_shape):
-    inputs = Input(input_shape, name="input_1")
-    """ Pre-trained ResNet50 Model """
-    seresnet50 = SEResNet50(weights=None, input_tensor=inputs)
-    # seresnet50.summary()
-    """ Encoder """
-    s1 = seresnet50.get_layer("input_1").output           ## (512 x 512)
-    s2 = seresnet50.get_layer("conv1_relu").output        ## (256 x 256)
-    s3 = seresnet50.get_layer("relu3_1_x1").output  ## (128 x 128)
-    s4 = seresnet50.get_layer("relu4_1_x1").output  ## (64 x 64)
-    s5 = seresnet50.get_layer("relu5_1_x1").output  ## (32 x 32)
-
-    """ Bridge """
-    b1 = seresnet50.get_layer("block_out_5_3_x4").output  ## (16 x 16)
-
-    """ Decoder """
-    x = IMG_H
-    d1 = decoder_block(b1, s5, x)                     ## (32 x 32)
-    x = x/2
-    d2 = decoder_block(d1, s4, x)                     ## (64 x 64)
-    x = x/2
-    d3 = decoder_block(d2, s3, x)                     ## (128 x 128)
-    x = x/2
-    d4 = decoder_block(d3, s2, x)                      ## (256 x 256)
-    x = x/2
-    d5 = decoder_block(d4, s1, x)                      ## (512 x 512)
-    
-    """ Output """
-    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d5)
-
-    model = tf.keras.models.Model(inputs, outputs)
-
-    return model
-
-
-# In[ ]:
-
-
-# create discriminator model
-def build_discriminator(inputs):
-    num_layers = 4
-    if IMG_H > 128:
-        num_layers = 5
-    f = [2**i for i in range(num_layers)]
-    x = inputs
-    features = []
-    for i in range(0, num_layers):
-        if i == 0:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
-            x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
-            # x = tf.keras.layers.BatchNormalization()(x)
-            x = tf.keras.layers.LeakyReLU(0.2)(x)
-        
-        else:
-            x = tf.keras.layers.DepthwiseConv2D(kernel_size = (3, 3), strides=(2, 2), padding='same')(x)
-            x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size = (1, 1),strides=(2,2), padding='same')(x)
-            x = tf.keras.layers.BatchNormalization()(x)
-            x = tf.keras.layers.LeakyReLU(0.2)(x)
-        # x = tf.keras.layers.Dropout(0.3)(x)
-        
-        features.append(x)
-           
-    x = tf.keras.layers.Flatten()(x)
-    features.append(x)
-    output = tf.keras.layers.Dense(1, activation="softmax")(x)
-
-    model = tf.keras.models.Model(inputs, outputs = [features, output])
-    
-    return model
-
-
-# In[ ]:
-
-
 def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     class_names = ["normal", "defect"] # normal = 0, defect = 1
     start_time = datetime.now()
@@ -1102,7 +631,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     real_label = []
     rec_loss_list = []
     feat_loss_list = []
-    ssim_loss_list = []
+    # ssim_loss_list = []
     # counter = 0
     
     for images, labels in tqdm(test_ds, desc='testing stages'):
@@ -1160,6 +689,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     TESTING_DURATION = end_time - start_time
     print(f'Duration of Testing: {end_time - start_time}')
     arr_result = [
+        f"Model Spec: {name_model}",
         f"AUC: {auc_out}",
         f"Accuracy: {(diagonal_sum / sum_of_all_elements)}",
         f"False Alarm Rate (FPR): {(FP/(FP+TN))}", 
@@ -1169,7 +699,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         f"NPV: {(TN/(FN+TN))}", 
         f"F1-Score: {(f1_score(real_label, scores_ano))}", 
         f"Training Duration: {TRAINING_DURATION}",
-        # f"Testing Duration: {TESTING_DURATION}"
+        f"Testing Duration: {TESTING_DURATION}"
     ]
     print("\n".join(arr_result))
     
@@ -1183,26 +713,6 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     # print("F1-Score: ", f1_score(real_label, scores_ano))
     
     write_result(arr_result, name_model)
-
-
-# In[ ]:
-
-
-input_shape = (IMG_H, IMG_W, IMG_C)
-# set input 
-inputs = tf.keras.layers.Input(input_shape, name="input_1")
-# inputs_disc = tf.keras.layers.Input((IMG_H, IMG_W, 1), name="input_1")
-
-g_model = build_seresnet50_unet(input_shape)
-d_model = build_discriminator(inputs)
-# grayscale_converter = tf.keras.layers.Lambda(lambda x: tf.image.rgb_to_grayscale(x))
-d_model.compile()
-g_model.compile()
-g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-
-d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:
