@@ -3,18 +3,19 @@ import tensorflow as tf
 # class for SSIM loss function
 class SSIMLoss(tf.keras.losses.Loss):
     def __init__(self,
+                 image_size,
                  reduction=tf.keras.losses.Reduction.AUTO,
                  name='SSIMLoss'):
         super().__init__(reduction=reduction, name=name)
-        
+        self.image_size = image_size
 
-    def call(self, ori, recon, image_size=128):
+    def call(self, ori, recon):
         recon = tf.convert_to_tensor(recon)
         ori = tf.cast(ori, recon.dtype)
 
         # Loss 3: SSIM Loss
 #         loss_ssim =  tf.reduce_mean(1 - tf.image.ssim(ori, recon, max_val=1.0)[0]) 
-        loss_ssim = tf.reduce_mean(1 - tf.image.ssim(ori, recon, max_val=image_size, filter_size=7, k1=0.01 ** 2, k2=0.03 ** 2))
+        loss_ssim = tf.reduce_mean(1 - tf.image.ssim(ori, recon, max_val=self.image_size, filter_size=7, k1=0.01 ** 2, k2=0.03 ** 2))
         return loss_ssim
     
 

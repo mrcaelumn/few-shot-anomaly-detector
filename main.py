@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
+# In[1]:
 
 
 import tensorflow as tf
@@ -25,7 +25,7 @@ import math
 import natsort
 
 
-# In[ ]:
+# In[2]:
 
 
 from models.resnet50 import build_generator_resnet50_unet
@@ -39,7 +39,7 @@ from models.loss_func import SSIMLoss, AdversarialLoss, MultiFeatureLoss
 from models.data_augmentation import selecting_images_preprocessing, sliding_crop     , sliding_crop_and_select_one, custom_v3, enhance_image
 
 
-# In[ ]:
+# In[3]:
 
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -53,7 +53,7 @@ parser.add_argument("-bb", "--BACKBONE", default="seresnet50", help="backbone mo
 args = vars(parser.parse_args())
 
 
-# In[ ]:
+# In[5]:
 
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -162,7 +162,7 @@ def roc(labels, scores, name_model):
     return roc_auc, optimal_threshold
 
 
-# In[ ]:
+# In[6]:
 
 
 # delcare all loss function that we will use
@@ -173,7 +173,7 @@ mse = tf.keras.losses.MeanSquaredError()
 
 multimse = MultiFeatureLoss()
 # SSIM loss
-ssim = SSIMLoss()
+ssim = SSIMLoss(IMG_H)
 
 
 # In[ ]:
@@ -773,7 +773,7 @@ def train_step(real_images):
         loss_rec = mae(real_images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        loss_ssim =  ssim(real_images, reconstructed_images, image_size=IMG_H)
+        loss_ssim =  ssim(real_images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
         # loss_feat = mse(feature_real, feature_fake)
