@@ -8,7 +8,7 @@ class SSIMLoss(tf.keras.losses.Loss):
         super().__init__(reduction=reduction, name=name)
         
 
-    def call(self, ori, recon, image_size):
+    def call(self, ori, recon, image_size=128):
         recon = tf.convert_to_tensor(recon)
         ori = tf.cast(ori, recon.dtype)
 
