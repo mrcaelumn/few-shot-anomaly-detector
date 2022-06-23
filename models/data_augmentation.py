@@ -4,7 +4,7 @@ import pandas as pd
 import multiprocess as mp
 import gc
 import tensorflow as tf
-
+import cv2
 
 
 def get_number_by_percentage(percentage, whole):
