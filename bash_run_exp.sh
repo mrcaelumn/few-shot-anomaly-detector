@@ -54,7 +54,7 @@ for t in ${listDataset[@]}; do
     echo "Start Program $t"
 #     run programming
     # python3 few-shot-train-seresnet50.py -dn $t -s 20 -nd 0 -bb "seresnet50" > output_$t.log
-    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" > output_$t.log
+    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnet50" > output_$t.log
     # echo "echo 3 >  /proc/sys/vm/drop_caches"
     sleep 60
     echo "Oops! I fell asleep for a couple seconds!"
