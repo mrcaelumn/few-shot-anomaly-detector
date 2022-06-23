@@ -773,7 +773,7 @@ def train_step(real_images):
         loss_rec = mae(real_images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        loss_ssim =  ssim(real_images, reconstructed_images)
+        loss_ssim =  ssim(real_images, reconstructed_images, IMG_H)
 
         # Loss 4: FEATURE Loss
         # loss_feat = mse(feature_real, feature_fake)
