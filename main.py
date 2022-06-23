@@ -135,42 +135,6 @@ test_data_path = f"data/{DATASET_NAME}/test_data"
 # In[ ]:
 
 
-input_shape = (IMG_H, IMG_W, IMG_C)
-# set input 
-inputs = tf.keras.layers.Input(input_shape, name="input_1")
-
-g_model = build_seresnet50_unet(input_shape, IMG_H, IMG_C)
-d_model = build_discriminator(inputs, IMG_H)
-
-if args["BACKBONE"] == "resnet50":
-    
-    print("backbone selected: resnet50")
-    g_model = build_generator_resnet50_unet(input_shape, IMG_H, IMG_C)
-elif args["BACKBONE"] == "seresnext50":
-    
-    print("backbone selected: seresnext50")
-    g_model = build_seresnext50_unet(input_shape, IMG_H, IMG_C)
-else:
-    
-    print("backbone selected (default): seresnext50")
-    g_model = build_seresnet50_unet(input_shape, IMG_H, IMG_C)
-    
-# d_model.summary()
-# g_model.summary()
-
-d_model.compile()
-g_model.compile()
-
-g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-
-d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
-
-
-# In[ ]:
-
-
 def plot_roc_curve(fpr, tpr, name_model):
     plt.plot(fpr, tpr, color='orange', label='ROC')
     plt.plot([0, 1], [0, 1], color='darkblue', linestyle='--')
@@ -576,6 +540,42 @@ train_dataset = Dataset(train_data_path, training=True, limit=LIMIT_TRAIN_IMAGES
 
 eval_dataset = Dataset(eval_data_path, training=False, limit=LIMIT_EVAL_IMAGES)
 eval_ds = eval_dataset.get_dataset(1)
+
+
+# In[ ]:
+
+
+input_shape = (IMG_H, IMG_W, IMG_C)
+# set input 
+inputs = tf.keras.layers.Input(input_shape, name="input_1")
+
+g_model = build_seresnet50_unet(input_shape, IMG_H, IMG_C)
+d_model = build_discriminator(inputs, IMG_H)
+
+if args["BACKBONE"] == "resnet50":
+    
+    print("backbone selected: resnet50")
+    g_model = build_generator_resnet50_unet(input_shape, IMG_H, IMG_C)
+elif args["BACKBONE"] == "seresnext50":
+    
+    print("backbone selected: seresnext50")
+    g_model = build_seresnext50_unet(input_shape, IMG_H, IMG_C)
+else:
+    
+    print("backbone selected (default): seresnext50")
+    g_model = build_seresnet50_unet(input_shape, IMG_H, IMG_C)
+    
+# d_model.summary()
+# g_model.summary()
+
+d_model.compile()
+g_model.compile()
+
+g_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# g_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+
+d_optimizer = GCAdam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
+# d_optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, beta_1=0.5, beta_2=0.999)
 
 
 # In[ ]:

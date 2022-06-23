@@ -3,7 +3,7 @@
 
 
 ### create folders
-listFolder=("result" "samples" "saved_model" "plot_output", "text_output")
+listFolder=("result" "samples" "saved_model" "plot_output" "text_output")
 
 for t in ${listFolder[@]}; do
     echo "Create folder $t if not exists"
