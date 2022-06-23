@@ -58,7 +58,6 @@ args = vars(parser.parse_args())
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-ORI_SIZE = (271, 481)
 IMG_H = 128
 IMG_W = 128
 IMG_C = 3  ## Change this to 1 for grayscale.

@@ -6,6 +6,7 @@ import gc
 import tensorflow as tf
 import cv2
 
+ORI_SIZE = (271, 481)
 
 def get_number_by_percentage(percentage, whole):
     return math.ceil(float(percentage)/100 * float(whole))
