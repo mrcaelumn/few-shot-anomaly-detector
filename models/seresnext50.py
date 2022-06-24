@@ -181,7 +181,8 @@ def ResNeXt(
     x = ZeroPadding2D(padding=(3, 3))(x)
     x = Conv2D(64, (7, 7), strides=(2, 2), name='conv0', **conv_params)(x)
     x = BatchNormalization(name='bn0', **bn_params)(x)
-    x = Activation('relu', name='relu0')(x)
+    # x = Activation('relu', name='relu0')(x)
+    x = Activation(tf.nn.leaky_relu)(x)
     x = ZeroPadding2D(padding=(1, 1))(x)
     x = MaxPooling2D((3, 3), strides=(2, 2), padding='valid', name='pooling0')(x)
 
@@ -206,7 +207,8 @@ def ResNeXt(
     if include_top:
         x = GlobalAveragePooling2D(name='pool1')(x)
         x = Dense(classes, name='fc1')(x)
-        x = Activation('softmax', name='softmax')(x)
+        # x = Activation('softmax', name='softmax')(x)
+        x = Activation('tanh', name='softmax')(x)
 
     # Ensure that the model takes into account any potential predecessors of `input_tensor`.
     if input_tensor is not None:
@@ -246,9 +248,11 @@ def ChannelSE(reduction=16, **kwargs):
         x = GlobalAveragePooling2D()(x)
         x = Lambda(expand_dims, arguments={'channels_axis': channels_axis})(x)
         x = Conv2D(channels // reduction, (1, 1), kernel_initializer='he_uniform')(x)
-        x = Activation('relu')(x)
+        # x = Activation('relu')(x)
+        x = Activation(tf.nn.leaky_relu)(x)
         x = Conv2D(channels, (1, 1), kernel_initializer='he_uniform')(x)
-        x = Activation('sigmoid')(x)
+        # x = Activation('sigmoid')(x)
+        x = Activation('tanh')(x)
 
         # apply attention
         x = Multiply()([input_tensor, x])
@@ -269,13 +273,15 @@ def SEResNeXtBottleneck(filters, reduction=16, strides=1, groups=32, base_width=
         # bottleneck
         x = Conv2D(width, (1, 1), kernel_initializer='he_uniform', use_bias=False)(x)
         x = BatchNormalization(**bn_params)(x)
-        x = Activation('relu')(x)
+        # x = Activation('relu')(x)
+        x = Activation(tf.nn.leaky_relu)(x)
 
         x = ZeroPadding2D(1)(x)
         x = GroupConv2D(width, (3, 3), strides=strides, groups=groups,
                         kernel_initializer='he_uniform', use_bias=False, **kwargs)(x)
         x = BatchNormalization(**bn_params)(x)
-        x = Activation('relu')(x)
+        # x = Activation('relu')(x)
+        x = Activation(tf.nn.leaky_relu)(x)
 
         x = Conv2D(filters, (1, 1), kernel_initializer='he_uniform', use_bias=False)(x)
         x = BatchNormalization(**bn_params)(x)
@@ -296,7 +302,8 @@ def SEResNeXtBottleneck(filters, reduction=16, strides=1, groups=32, base_width=
         # add residual connection
         x = Add()([x, residual])
 
-        x = Activation('relu')(x)
+        # x = Activation('relu')(x)
+        x = Activation(tf.nn.leaky_relu)(x)
 
         return x
 
@@ -361,26 +368,30 @@ def SEResNext50(
         x = Conv2D(init_filters, (3, 3), strides=2,
                           use_bias=False, kernel_initializer='he_uniform')(x)
         x = BatchNormalization(**bn_params)(x)
-        x = Activation('relu')(x)
+        # x = Activation('relu')(x)
+        x = Activation(tf.nn.leaky_relu)(x)
 
         x = ZeroPadding2D(1)(x)
         x = Conv2D(init_filters, (3, 3), use_bias=False,
                           kernel_initializer='he_uniform')(x)
         x = BatchNormalization(**bn_params)(x)
-        x = Activation('relu')(x)
+        # x = Activation('relu')(x)
+        x = Activation(tf.nn.leaky_relu)(x)
 
         x = ZeroPadding2D(1)(x)
         x = Conv2D(init_filters * 2, (3, 3), use_bias=False,
                           kernel_initializer='he_uniform')(x)
         x = BatchNormalization(**bn_params)(x)
-        x = Activation('relu')(x)
+        # x = Activation('relu')(x)
+        x = Activation(tf.nn.leaky_relu)(x)
 
     else:
         x = ZeroPadding2D(3)(x)
         x = Conv2D(init_filters, (7, 7), strides=2, use_bias=False,
                           kernel_initializer='he_uniform')(x)
         x = BatchNormalization(**bn_params)(x)
-        x = Activation('relu')(x)
+        # x = Activation('relu')(x)
+        x = Activation(tf.nn.leaky_relu)(x)
 
     x = ZeroPadding2D(1)(x)
     x = MaxPooling2D((3, 3), strides=2)(x)
@@ -388,12 +399,10 @@ def SEResNext50(
     # body of resnet
     filters = model_params.init_filters * 2
     for i, stage in enumerate(model_params.repetitions):
-
         # increase number of filters with each stage
         filters *= 2
 
         for j in range(stage):
-
             # decrease spatial dimensions for each stage (except first, because we have maxpool before)
             if i == 0 and j == 0:
                 x = residual_block(filters, reduction=model_params.reduction,
@@ -411,7 +420,8 @@ def SEResNext50(
         if model_params.dropout is not None:
             x = Dropout(model_params.dropout)(x)
         x = Dense(classes)(x)
-        x = Activation('softmax', name='output')(x)
+        # x = Activation('softmax', name='output')(x)
+        x = Activation('tanh', name='output')(x)
 
     # Ensure that the model takes into account any potential predecessors of `input_tensor`.
     if input_tensor is not None:
@@ -465,9 +475,9 @@ def build_seresnext50_unet(input_shape, img_size=128, img_channel=3):
     x = x/2
     d5 = decoder_block(d4, s1, x)                      ## (512 x 512)
 
-
     """ Output """
-    outputs = Conv2D(img_channel, 1, padding="same", activation="tanh")(d4)
+    outputs = Conv2D(img_channel, 1, padding="same", activation="tanh")(d5)
 
     model = Model(inputs, outputs, name="SEResNext50_U-Net")
+    
     return model

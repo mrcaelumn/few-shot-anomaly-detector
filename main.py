@@ -33,7 +33,6 @@ from models.seresnet50 import build_seresnet50_unet
 from models.seresnext50 import build_seresnext50_unet
 from models.discriminator import build_discriminator
 
-
 from models.custom_optimizers import GCAdam
 from models.loss_func import SSIMLoss, AdversarialLoss, MultiFeatureLoss
 from models.data_augmentation import selecting_images_preprocessing, sliding_crop     , sliding_crop_and_select_one, custom_v3, enhance_image
@@ -50,6 +49,7 @@ parser.add_argument("-dn", "--DATASET_NAME", default="mura", help="name of datas
 parser.add_argument("-s", "--SHOTS", default=20, type=int, help="how many data that you want to use.")
 parser.add_argument("-nd", "--NO_DATASET", default=0, type=int, help="select which number of dataset.")
 parser.add_argument("-bb", "--BACKBONE", default="seresnet50", help="backbone model for generator's encoder. (resnet50, seresnet50, seresnext50)")
+parser.add_argument("-m", "--MODE", default=True, type=bool, help="Mode. Train (True) or Only Test (False)")
 args = vars(parser.parse_args())
 
 
@@ -414,7 +414,6 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         axes=[]
         fig = plt.figure()
 
-        
         img, label = extraction(v, i)
        
         axes.append( fig.add_subplot(rows, cols, 1) )
@@ -425,10 +424,8 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         plt.imshow(img.astype(np.uint8), alpha=1.0)
         plt.axis('off')
 
-       
         img = tf.cast(img, tf.float64)
         img = (img - 127.5) / 127.5
-
 
         image = tf.reshape(img, (-1, IMG_H, IMG_W, IMG_C))
         reconstructed_images = g_model_inner.predict(image)
@@ -622,10 +619,10 @@ def calculate_a_score(out_g_model, out_d_model, images):
 def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     class_names = ["normal", "defect"] # normal = 0, defect = 1
     start_time = datetime.now()
+    
     g_model_inner.load_weights(g_filepath)
     d_model_inner.load_weights(d_filepath)
     
-        
     scores_ano = []
     real_label = []
     rec_loss_list = []
@@ -641,7 +638,6 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         '''for normal'''
         # temp_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, images)
         # score = temp_score.numpy()
-        
         
         '''for sliding images & Crop LR'''
         for image in images:
