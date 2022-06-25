@@ -67,6 +67,7 @@ stSize = 20
 # Weight initializers for the Generator network
 # WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 
+
 AUTOTUNE = tf.data.AUTOTUNE
 
 LIMIT_EVAL_IMAGES = 100
@@ -125,10 +126,11 @@ TRAIN = True
 if not TRAIN:
     g_model_path = "saved_model/g_model_name.h5"
     d_model_path = "saved_model/d_model_name.h5"
-    
-train_data_path = f"data/{DATASET_NAME}/train_data"
-eval_data_path = f"data/{DATASET_NAME}/eval_data"
-test_data_path = f"data/{DATASET_NAME}/test_data"
+
+ROOT_DATA_FOLDER = "data"
+train_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/train_data"
+eval_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/eval_data"
+test_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/test_data"
 
 
 # In[ ]:

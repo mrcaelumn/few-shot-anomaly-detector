@@ -32,9 +32,13 @@ done
 #     # "mura_sobelxy_64" "mura_sobelxy_64_v2"
 # )
 
+# listDataset=(
+#     "mura_scharr_x_8_v3" "mura_scharr_x_16_v3" "mura_scharr_x_32_v3" "mura_scharr_x_64_v3" "mura_scharr_x_ori_v3"
+#     "mura_scharr_y_8_v3" "mura_scharr_y_16_v3" "mura_scharr_y_32_v3" "mura_scharr_y_64_v3" "mura_scharr_y_ori_v3"
+# )
+
 listDataset=(
-    "mura_scharr_x_8_v3" "mura_scharr_x_16_v3" "mura_scharr_x_32_v3" "mura_scharr_x_64_v3" "mura_scharr_x_ori_v3"
-    "mura_scharr_y_8_v3" "mura_scharr_y_16_v3" "mura_scharr_y_32_v3" "mura_scharr_y_64_v3" "mura_scharr_y_ori_v3"
+    "mura_sobel_xy_32_v5" "mura_sobel_xy_64_v3" "mura_sobel_xy_ori_v5" "mura_scharr_x_8_v3" "mura_scharr_y_64_v3"
 )
 
 # listDataset=(
@@ -54,7 +58,7 @@ for t in ${listDataset[@]}; do
     echo "Start Program $t"
 #     run programming
     # python3 few-shot-train-seresnet50.py -dn $t -s 20 -nd 0 -bb "seresnet50" > output_$t.log
-    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnet50" > output_$t.log
+    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" > output_$t.log
     # echo "echo 3 >  /proc/sys/vm/drop_caches"
     sleep 60
     echo "Oops! I fell asleep for a couple seconds!"
