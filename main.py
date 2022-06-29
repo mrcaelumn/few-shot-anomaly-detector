@@ -50,13 +50,22 @@ parser.add_argument("-s", "--SHOTS", default=20, type=int, help="how many data t
 parser.add_argument("-nd", "--NO_DATASET", default=0, type=int, help="select which number of dataset.")
 parser.add_argument("-bb", "--BACKBONE", default="seresnet50", help="backbone model for generator's encoder. (resnet50, seresnet50, seresnext50)")
 parser.add_argument("-m", "--MODE", default=True, type=bool, help="Mode. Train (True) or Only Test (False)")
+parser.add_argument("-rtd", "--ROOT_DATA_DIR", default="target_data", help="Root directory of data")
+parser.add_argument("-ted", "--TEST_DATA", default="test_data", help="Directory of test data")
+parser.add_argument("-trd", "--TRAIN_DATA", default="train_data", help="Directory of train data")
+parser.add_argument("-eld", "--EVAL_DATA", default="eval_data", help="Directory of evaluation data")
+parser.add_argument("-rd", "--RESULT_DIR", default="result/", help="Directory of result")
+parser.add_argument("-smd", "--SAVED_MODEL_DIR", default="saved_model", help="Directory of saved_model")
 args = vars(parser.parse_args())
 
 
 # In[ ]:
 
 
+
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
+print(args)
 
 IMG_H = 128
 IMG_W = 128
@@ -67,11 +76,10 @@ stSize = 20
 # Weight initializers for the Generator network
 # WEIGHT_INIT = tf.keras.initializers.RandomNormal(mean=0.0, stddev=0.2)
 
-
 AUTOTUNE = tf.data.AUTOTUNE
 
 LIMIT_EVAL_IMAGES = 100
-LIMIT_TEST_IMAGES = 3000
+LIMIT_TEST_IMAGES = "MAX"
 LIMIT_TRAIN_IMAGES = 100
 
 TRAINING_DURATION = None
@@ -116,21 +124,26 @@ if IMG_C == 1:
     mode_colour = str(IMG_H) + "_gray"
 
 MODEL_BACKBONE = args["BACKBONE"]
+SAVED_MODEL_DIR = args["SAVED_MODEL_DIR"]
 name_model = f"{mode_colour}_{DATASET_NAME}_{NO_DATASET}_{MODEL_BACKBONE}_{n_shots}_shots_mura_detection_{str(meta_iters)}"
-g_model_path = f"saved_model/{name_model}_g_model.h5"
-d_model_path = f"saved_model/{name_model}_d_model.h5"
-plot_folder = "plot_output/"
-text_folder = "text_output/"
+g_model_path = f"{SAVED_MODEL_DIR}/{name_model}_g_model.h5"
+d_model_path = f"{SAVED_MODEL_DIR}/{name_model}_d_model.h5"
+result_folder = args["RESULT_DIR"]
 
-TRAIN = True
-if not TRAIN:
-    g_model_path = "saved_model/g_model_name.h5"
-    d_model_path = "saved_model/d_model_name.h5"
+TRAIN = args["MODE"]
+# print(TRAIN, type(TRAIN))
+# if not TRAIN:
+#     g_model_path = "saved_model/g_model_name.h5"
+#     d_model_path = "saved_model/d_model_name.h5"
 
-ROOT_DATA_FOLDER = "data"
-train_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/train_data"
-eval_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/eval_data"
-test_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/test_data"
+TRAIN_DATA_DIR = args["TRAIN_DATA"]
+EVAL_DATA_DIR = args["EVAL_DATA"]
+TEST_DATA_DIR = args["TEST_DATA"]
+
+ROOT_DATA_FOLDER = args["ROOT_DATA_DIR"]
+train_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/{TRAIN_DATA_DIR}"
+eval_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/{EVAL_DATA_DIR}"
+test_data_path = f"{ROOT_DATA_FOLDER}/{DATASET_NAME}/{TEST_DATA_DIR}"
 
 
 # In[ ]:
@@ -143,7 +156,7 @@ def plot_roc_curve(fpr, tpr, name_model):
     plt.ylabel('True Positive Rate')
     plt.title('Receiver Operating Characteristic (ROC) Curve')
     plt.legend()
-    plt.savefig(plot_folder + name_model+'_roc_curve.png')
+    plt.savefig(result_folder + name_model+'_roc_curve.png')
     plt.show()
     plt.clf()
 
@@ -227,7 +240,7 @@ def plot_confusion_matrix(cm, classes,
     plt.tight_layout()
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
-    plt.savefig(plot_folder + title+'_cm.png')
+    plt.savefig(result_folder + title+'_cm.png')
     plt.show()
     plt.clf()
     
@@ -236,9 +249,9 @@ def plot_epoch_result(iters, loss, name, model_name, colour):
 #     plt.plot(epochs, disc_loss, 'b', label='Discriminator loss')
     plt.title(name)
     plt.xlabel('Iters')
-    plt.ylabel('Loss')
+    plt.ylabel(name)
     plt.legend()
-    plt.savefig(plot_folder + model_name+ '_'+name+'_iters_result.png')
+    plt.savefig(result_folder + model_name+ '_'+name+'_iters_result.png')
     plt.show()
     plt.clf()
 
@@ -260,12 +273,12 @@ def plot_anomaly_score(score_ano, labels, name, model_name):
     plt.xlabel('Anomaly Scores')
     plt.ylabel('Number of samples')
     plt.legend(prop={'size': 12})
-    plt.savefig(plot_folder + model_name+ '_'+name+'_anomay_scores_dist.png')
+    plt.savefig(result_folder + model_name+ '_'+name+'_anomay_scores_dist.png')
     plt.show()
     plt.clf()
 
 def write_result(array_lines, name):
-    with open(f'{text_folder}{name}.txt', 'w+') as f:
+    with open(f'{result_folder}{name}.txt', 'w+') as f:
         f.write('\n'.join(array_lines))
 
 
@@ -285,15 +298,15 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
         list_path = natsort.natsorted(os.listdir(path))
         
         if training:
-            print("total number of dataset", len(list_path))
+            # print("total number of dataset", len(list_path))
 
             newarr_list_path = np.array_split(list_path, math.ceil(len(list_path)/NUMBER_IMAGES_SELECTED))
 
-            print("number of sub dataset", len(newarr_list_path))
+            # print("number of sub dataset", len(newarr_list_path))
 
             list_path = newarr_list_path[NO_DATASET]
 
-            print("data taken from dataset", len(list_path))
+            # print("data taken from dataset", len(list_path))
         
         
         for img in tqdm(list_path, desc='selecting images'):  
@@ -344,8 +357,7 @@ def prep_stage(x, train=True):
     # else: 
         # x = enhance_image(x, beta_contrast)
         # x = tfa.image.equalize(x)
-        # x = custom_v3(x)
-        
+        # x = custom_v3(x)      
     return x
 
 def post_stage(x):
@@ -384,11 +396,10 @@ def extraction_test(image, label):
     # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
     img = prep_stage(img, False)
-    # img = post_stage(img)
+    img = post_stage(img)
     
-    img_list = sliding_crop(img)
-    
-    img = [post_stage(a) for a in img_list]
+    # img_list = sliding_crop(img)
+    # img = [post_stage(a) for a in img_list]
 
     return img, label
 
@@ -442,7 +453,7 @@ def checking_gen_disc(mode, g_model_inner, d_model_inner, g_filepath, d_filepath
         plt.axis('off')
 
         fig.tight_layout()    
-        fig.savefig(mode+'_'+i+'.png')
+        fig.savefig(result_folder + mode+'_'+i+'.png')
         plt.show()
         plt.clf()
 
@@ -638,16 +649,16 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         
         # counter += 1
         '''for normal'''
-        # temp_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, images)
-        # score = temp_score.numpy()
+        temp_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, images)
+        score = temp_score.numpy()
         
         '''for sliding images & Crop LR'''
-        for image in images:
-            r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, image)
-            if r_score.numpy() > score or score == 0:
-                score = r_score.numpy()
-                loss_rec = r_rec_loss
-                loss_feat = r_feat_loss
+        # for image in images:
+        #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, image)
+        #     if r_score.numpy() > score or score == 0:
+        #         score = r_score.numpy()
+        #         loss_rec = r_rec_loss
+        #         loss_feat = r_feat_loss
                 
             
         scores_ano = np.append(scores_ano, score)
@@ -800,7 +811,9 @@ def train_step(real_images):
 
 if TRAIN:
     print("Start Trainning. ", name_model)
-    best_auc = 0.7
+    standard_auc = 0.7
+    best_auc = standard_auc
+    delay_ref = 3
     
     start_time = datetime.now()
     # for meta_iter in tqdm(range(meta_iters), desc=f'training process'):
@@ -862,16 +875,16 @@ if TRAIN:
                 # counter += 1
                 
                 '''for normal'''
-                # temp_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, images)
-                # score = temp_score.numpy()
+                temp_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, images)
+                score = temp_score.numpy()
 
                 '''for Sliding Images & LR Crop'''
-                for image in images:
-                    r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
-                    if r_score.numpy() > score or score == 0:
-                        score = r_score.numpy()
-                        loss_rec = r_rec_loss
-                        loss_feat = r_feat_loss
+                # for image in images:
+                #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
+                #     if r_score.numpy() > score or score == 0:
+                #         score = r_score.numpy()
+                #         loss_rec = r_rec_loss
+                #         loss_feat = r_feat_loss
                     
                 scores_ano = np.append(scores_ano, score)
                 real_label = np.append(real_label, labels.numpy()[0])
@@ -895,7 +908,7 @@ if TRAIN:
                 f"model saved. batch {meta_iter}:, AUC={auc_out:.3f}, TP={TP}, TN={TN}, FP={FP}, FN={FN}, Gen Loss={gen_loss_out:.5f}, Disc Loss={disc_loss_out:.5f}" 
             )
             
-            if auc_out >= best_auc:
+            if auc_out >= best_auc or auc_out > standard_auc:
                 print(
                     f"the best model saved. at batch {meta_iter}: with AUC={auc_out:.3f}"
                 )
@@ -918,7 +931,7 @@ if TRAIN:
     """
     plot_epoch_result(iter_list, gen_loss_list, "Generator_Loss", name_model, "g")
     plot_epoch_result(iter_list, disc_loss_list, "Discriminator_Loss", name_model, "r")
-    plot_epoch_result(iter_list, auc_list, "AUC", name_model, "b")
+    plot_epoch_result(iter_list, auc_list, "AUC_Score", name_model, "b")
 
 
 # In[ ]:
