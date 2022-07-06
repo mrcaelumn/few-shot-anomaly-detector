@@ -66,86 +66,114 @@ def remove_hidden_file(list_arr):
 # In[ ]:
 
 
-## convert colour of images
-# for target_folder in [
-#     "mura_sobelx_16","mura_sobely_16", "mura_sobelxy_16", 
-#     "mura_sobelx_16_v2","mura_sobely_16_v2", "mura_sobelxy_16_v2"]:
+# ## convert colour of images
+# # for target_folder in [
+# #     "mura_sobelx_16","mura_sobely_16", "mura_sobelxy_16", 
+# #     "mura_sobelx_16_v2","mura_sobely_16_v2", "mura_sobelxy_16_v2"]:
 
-root_target_dir = "target_data"
-list_target_dir = natsort.natsorted(os.listdir(root_target_dir))
+# root_target_dir = "target_data"
+# list_target_dir = natsort.natsorted(os.listdir(root_target_dir))
 
 
-list_target_dir = remove_hidden_file(list_target_dir)
-# print(list_target_dir)
+# list_target_dir = remove_hidden_file(list_target_dir)
+# # print(list_target_dir)
 
-# ['mura', 'sobel', 'xy', 'ori', 'v2']
+# # ['mura', 'sobel', 'xy', 'ori', 'v2']
 
-for target_folder in list_target_dir:  
-    target_data = target_folder.split("_")
-    print(target_data)
-    type_operator, type_pre, depth, kersize = target_data[1], target_data[2], target_data[3], target_data[4]
+# for target_folder in list_target_dir:  
+#     target_data = target_folder.split("_")
+#     print(target_data)
+#     type_operator, type_pre, depth, kersize = target_data[1], target_data[2], target_data[3], target_data[4]
     
-    x, y, ks, dp = 1, 1, 1, -1
+#     x, y, ks, dp = 1, 1, 1, -1
     
-    if type_pre == "x":
-        y=0
-    elif type_pre == "y":
-        x=0
+#     if type_pre == "x":
+#         y=0
+#     elif type_pre == "y":
+#         x=0
     
     
-    if depth == "8":
-        dp=cv2.CV_8U
-    elif depth == "16":
-        dp=cv2.CV_16U
-    elif depth == "32":
-        dp=cv2.CV_32F
-    elif depth == "64":
-        dp=cv2.CV_64F
+#     if depth == "8":
+#         dp=cv2.CV_8U
+#     elif depth == "16":
+#         dp=cv2.CV_16U
+#     elif depth == "32":
+#         dp=cv2.CV_32F
+#     elif depth == "64":
+#         dp=cv2.CV_64F
     
-    if kersize == "v3":
-        ks=3
-    elif kersize == "v5":
-        ks=5
+#     if kersize == "v3":
+#         ks=3
+#     elif kersize == "v5":
+#         ks=5
     
         
-    print(f"{type_operator=}, {type_pre=}, {depth=}, {kersize=}")
-    print(f"{x=}, {y=}, {ks=}, {dp=}")
+#     print(f"{type_operator=}, {type_pre=}, {depth=}, {kersize=}")
+#     print(f"{x=}, {y=}, {ks=}, {dp=}")
     
-    # time.sleep(3)
-    # for mode in ["test_data", "test_data_v2","train_data", "eval_data"]:
-    root_folder = "data/mura_april"
-    list_root_dir = os.listdir(root_folder)
-    # print(list_root_dir)
-    list_root_dir = remove_hidden_file(list_root_dir)
-    # print(list_root_dir)
+#     # time.sleep(3)
+#     # for mode in ["test_data", "test_data_v2","train_data", "eval_data"]:
+#     root_folder = "data/mura_april"
+#     list_root_dir = os.listdir(root_folder)
+#     # print(list_root_dir)
+#     list_root_dir = remove_hidden_file(list_root_dir)
+#     # print(list_root_dir)
         
-    for mode in list_root_dir:
-        # for class_name in ["normal", "defect"]:
-        for class_name in ["mura", "normal", "smura"]:
-            Input_dir = f'{root_folder}/{mode}/{class_name}/'
-            Out_dir = f'{root_target_dir}/{target_folder}/{mode}/{class_name}/'
-            # create dir if it isnt exist
-            if not os.path.exists(Out_dir):
-                os.makedirs(Out_dir)
+#     for mode in list_root_dir:
+#         # for class_name in ["normal", "defect"]:
+#         for class_name in ["mura", "normal", "smura"]:
+#             Input_dir = f'{root_folder}/{mode}/{class_name}/'
+#             Out_dir = f'{root_target_dir}/{target_folder}/{mode}/{class_name}/'
+#             # create dir if it isnt exist
+#             if not os.path.exists(Out_dir):
+#                 os.makedirs(Out_dir)
                 
-            for i in tqdm(os.listdir(Input_dir), desc=f'Converting dataset {mode} with class {class_name} images {target_folder}'):
+#             for i in tqdm(os.listdir(Input_dir), desc=f'Converting dataset {mode} with class {class_name} images {target_folder}'):
                 
-                if i != ".DS_Store" and i != ".ipynb_checkpoints":
+#                 if i != ".DS_Store" and i != ".ipynb_checkpoints":
                     
-                    inputFile = Input_dir+i
-                    outputFile = Out_dir+i
+#                     inputFile = Input_dir+i
+#                     outputFile = Out_dir+i
 
-                    # print(inputFile)
-                    resize_image(inputFile, OutputFile)
-                    # if type_operator == "sobel":
-                    #     # print("sobel function executed.")
-                    #     convert_sobel(inputFile, outputFile, x=x, y=y, ks=ks, depth=dp)
-                    # elif type_operator == "scharr":
-                    #     # print("scharr function executed.")
-                    #     convert_scharr(inputFile, outputFile, x=x, y=y, depth=dp)
+#                     # print(inputFile)
+#                     resize_image(inputFile, OutputFile)
+#                     # if type_operator == "sobel":
+#                     #     # print("sobel function executed.")
+#                     #     convert_sobel(inputFile, outputFile, x=x, y=y, ks=ks, depth=dp)
+#                     # elif type_operator == "scharr":
+#                     #     # print("scharr function executed.")
+#                     #     convert_scharr(inputFile, outputFile, x=x, y=y, depth=dp)
 
-            # print("done.", class_name, mode)
-        #     break
+#             # print("done.", class_name, mode)
+#         #     break
+
+
+# In[ ]:
+
+
+root_target_dir = "target_data/mura_mei"
+root_folder = "data/mura_mei"
+list_root_dir = os.listdir(root_folder)
+# print(list_root_dir)
+list_root_dir = remove_hidden_file(list_root_dir)
+# print(list_root_dir)
+
+for mode in list_root_dir:
+    # for class_name in ["normal", "defect"]:
+    for class_name in ["mura", "normal", "smura"]:
+        Input_dir = f'{root_folder}/{mode}/{class_name}/'
+        Out_dir = f'{root_target_dir}/{mode}/{class_name}/'
+        # create dir if it isnt exist
+        if not os.path.exists(Out_dir):
+            os.makedirs(Out_dir)
+
+        for i in tqdm(os.listdir(Input_dir), desc=f'Converting dataset {mode} with class {class_name} images {root_target_dir}'):
+            if i != ".DS_Store" and i != ".ipynb_checkpoints":
+
+                inputFile = Input_dir+i
+                outputFile = Out_dir+i
+                # print(inputFile)
+                resize_image(inputFile, OutputFile)
 
 
 # In[ ]:
