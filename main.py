@@ -41,15 +41,25 @@ from models.data_augmentation import selecting_images_preprocessing, sliding_cro
 # In[ ]:
 
 
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, ArgumentTypeError
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise ArgumentTypeError('Boolean value expected.')
+        
 # Parse command line arguments
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("-dn", "--DATASET_NAME", default="mura", help="name of dataset in data directory.")
 parser.add_argument("-s", "--SHOTS", default=20, type=int, help="how many data that you want to use.")
 parser.add_argument("-nd", "--NO_DATASET", default=0, type=int, help="select which number of dataset.")
 parser.add_argument("-bb", "--BACKBONE", default="seresnet50", help="backbone model for generator's encoder. (resnet50, seresnet50, seresnext50)")
-parser.add_argument("-m", "--MODE", default=True, type=bool, help="Mode. Train (True) or Only Test (False)")
+parser.add_argument("-mm", "--MODE", default=True, type=str2bool, help="Mode. Train (True) or Only Test (False)")
 parser.add_argument("-rtd", "--ROOT_DATA_DIR", default="target_data", help="Root directory of data")
 parser.add_argument("-ted", "--TEST_DATA", default="test_data", help="Directory of test data")
 parser.add_argument("-trd", "--TRAIN_DATA", default="train_data", help="Directory of train data")
@@ -131,7 +141,7 @@ d_model_path = f"{SAVED_MODEL_DIR}/{name_model}_d_model.h5"
 result_folder = args["RESULT_DIR"]
 
 TRAIN = args["MODE"]
-# print(TRAIN, type(TRAIN))
+print(TRAIN, type(TRAIN))
 # if not TRAIN:
 #     g_model_path = "saved_model/g_model_name.h5"
 #     d_model_path = "saved_model/d_model_name.h5"
@@ -811,142 +821,142 @@ def train_step(real_images):
 # In[ ]:
 
 
-if TRAIN:
-    print("Start Trainning. ", name_model)
-    standard_auc = 0.7
-    best_auc = standard_auc
-    delay_ref = 3
+# if TRAIN:
+#     print("Start Trainning. ", name_model)
+#     standard_auc = 0.7
+#     best_auc = standard_auc
+#     delay_ref = 3
     
-    start_time = datetime.now()
-    # for meta_iter in tqdm(range(meta_iters), desc=f'training process'):
-    for meta_iter in range(meta_iters):
-        frac_done = meta_iter / meta_iters
-        cur_meta_step_size = (1 - frac_done) * meta_step_size
-        # Temporarily save the weights from the model.
-        d_old_vars = d_model.get_weights()
-        g_old_vars = g_model.get_weights()
-        # Get a sample from the full dataset.
-        mini_dataset = train_dataset.get_mini_dataset(
-            inner_batch_size, inner_iters, train_shots, classes
-        )
-        gen_loss_out = 0.0
-        disc_loss_out = 0.0
+#     start_time = datetime.now()
+#     # for meta_iter in tqdm(range(meta_iters), desc=f'training process'):
+#     for meta_iter in range(meta_iters):
+#         frac_done = meta_iter / meta_iters
+#         cur_meta_step_size = (1 - frac_done) * meta_step_size
+#         # Temporarily save the weights from the model.
+#         d_old_vars = d_model.get_weights()
+#         g_old_vars = g_model.get_weights()
+#         # Get a sample from the full dataset.
+#         mini_dataset = train_dataset.get_mini_dataset(
+#             inner_batch_size, inner_iters, train_shots, classes
+#         )
+#         gen_loss_out = 0.0
+#         disc_loss_out = 0.0
         
-        # print("meta_iter: ", meta_iter)
-        for images, _ in mini_dataset:
-            g_loss, d_loss = train_step(images)
-            gen_loss_out = g_loss
-            disc_loss_out = d_loss
+#         # print("meta_iter: ", meta_iter)
+#         for images, _ in mini_dataset:
+#             g_loss, d_loss = train_step(images)
+#             gen_loss_out = g_loss
+#             disc_loss_out = d_loss
             
-        d_new_vars = d_model.get_weights()
-        g_new_vars = g_model.get_weights()
+#         d_new_vars = d_model.get_weights()
+#         g_new_vars = g_model.get_weights()
 
-        # Perform SGD for the meta step.
-        for var in range(len(d_new_vars)):
-            d_new_vars[var] = d_old_vars[var] + (
-                (d_new_vars[var] - d_old_vars[var]) * cur_meta_step_size
-            )
+#         # Perform SGD for the meta step.
+#         for var in range(len(d_new_vars)):
+#             d_new_vars[var] = d_old_vars[var] + (
+#                 (d_new_vars[var] - d_old_vars[var]) * cur_meta_step_size
+#             )
 
-        for var in range(len(g_new_vars)):
-            g_new_vars[var] = g_old_vars[var] + (
-                (g_new_vars[var] - g_old_vars[var]) * cur_meta_step_size
-            )
+#         for var in range(len(g_new_vars)):
+#             g_new_vars[var] = g_old_vars[var] + (
+#                 (g_new_vars[var] - g_old_vars[var]) * cur_meta_step_size
+#             )
 
-        # After the meta-learning step, reload the newly-trained weights into the model.
-        g_model.set_weights(g_new_vars)
-        d_model.set_weights(d_new_vars)
+#         # After the meta-learning step, reload the newly-trained weights into the model.
+#         g_model.set_weights(g_new_vars)
+#         d_model.set_weights(d_new_vars)
         
-        # Evaluation loop
-        meta_iter = meta_iter + 1
-        if meta_iter % 100 == 0:
-            eval_g_model = g_model
-            eval_d_model = d_model
+#         # Evaluation loop
+#         meta_iter = meta_iter + 1
+#         if meta_iter % 100 == 0:
+#             eval_g_model = g_model
+#             eval_d_model = d_model
             
-            iter_list = np.append(iter_list, meta_iter)
-            gen_loss_list = np.append(gen_loss_list, gen_loss_out)
-            disc_loss_list = np.append(disc_loss_list, disc_loss_out)
+#             iter_list = np.append(iter_list, meta_iter)
+#             gen_loss_list = np.append(gen_loss_list, gen_loss_out)
+#             disc_loss_list = np.append(disc_loss_list, disc_loss_out)
 
-            scores_ano = []
-            real_label = []
-            # counter = 0
+#             scores_ano = []
+#             real_label = []
+#             # counter = 0
            
-            for images, labels in tqdm(eval_ds, desc=f'evalution stage at {meta_iter} batch'):
+#             for images, labels in tqdm(eval_ds, desc=f'evalution stage at {meta_iter} batch'):
 
-                loss_rec, loss_feat = 0.0, 0.0
-                score = 0
-                # counter += 1
+#                 loss_rec, loss_feat = 0.0, 0.0
+#                 score = 0
+#                 # counter += 1
                 
-                '''for normal'''
-                temp_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, images)
-                score = temp_score.numpy()
+#                 '''for normal'''
+#                 temp_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, images)
+#                 score = temp_score.numpy()
 
-                '''for Sliding Images & LR Crop'''
-                # for image in images:
-                #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
-                #     if r_score.numpy() > score or score == 0:
-                #         score = r_score.numpy()
-                #         loss_rec = r_rec_loss
-                #         loss_feat = r_feat_loss
+#                 '''for Sliding Images & LR Crop'''
+#                 # for image in images:
+#                 #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
+#                 #     if r_score.numpy() > score or score == 0:
+#                 #         score = r_score.numpy()
+#                 #         loss_rec = r_rec_loss
+#                 #         loss_feat = r_feat_loss
                     
-                scores_ano = np.append(scores_ano, score)
-                real_label = np.append(real_label, labels.numpy()[0])
-                # if (counter % 100) == 0:
-                #     print(counter, " tested.")
-            # print("scores_ano:", scores_ano)
-            '''Scale scores vector between [0, 1]'''
-            scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
-            # print("real_label:", real_label)
-            # print("scores_ano:", scores_ano)
-            auc_out, threshold = roc(real_label, scores_ano, name_model)
-            auc_list = np.append(auc_list, auc_out)
-            scores_ano = (scores_ano > threshold).astype(int)
-            cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
-            TP = cm[1][1]
-            FP = cm[0][1]
-            FN = cm[1][0]
-            TN = cm[0][0]
-            # print(cm)
-            print(
-                f"model saved. batch {meta_iter}:, AUC={auc_out:.3f}, TP={TP}, TN={TN}, FP={FP}, FN={FN}, Gen Loss={gen_loss_out:.5f}, Disc Loss={disc_loss_out:.5f}" 
-            )
+#                 scores_ano = np.append(scores_ano, score)
+#                 real_label = np.append(real_label, labels.numpy()[0])
+#                 # if (counter % 100) == 0:
+#                 #     print(counter, " tested.")
+#             # print("scores_ano:", scores_ano)
+#             '''Scale scores vector between [0, 1]'''
+#             scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
+#             # print("real_label:", real_label)
+#             # print("scores_ano:", scores_ano)
+#             auc_out, threshold = roc(real_label, scores_ano, name_model)
+#             auc_list = np.append(auc_list, auc_out)
+#             scores_ano = (scores_ano > threshold).astype(int)
+#             cm = tf.math.confusion_matrix(labels=real_label, predictions=scores_ano).numpy()
+#             TP = cm[1][1]
+#             FP = cm[0][1]
+#             FN = cm[1][0]
+#             TN = cm[0][0]
+#             # print(cm)
+#             print(
+#                 f"model saved. batch {meta_iter}:, AUC={auc_out:.3f}, TP={TP}, TN={TN}, FP={FP}, FN={FN}, Gen Loss={gen_loss_out:.5f}, Disc Loss={disc_loss_out:.5f}" 
+#             )
             
-            if auc_out >= best_auc or auc_out > standard_auc:
-                print(
-                    f"the best model saved. at batch {meta_iter}: with AUC={auc_out:.3f}"
-                )
+#             if auc_out >= best_auc or auc_out > standard_auc:
+#                 print(
+#                     f"the best model saved. at batch {meta_iter}: with AUC={auc_out:.3f}"
+#                 )
                 
-                best_g_model_path = g_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out:.2f}.h5")
-                best_d_model_path = d_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out:.2f}.h5")
-                g_model.save(best_g_model_path)
-                d_model.save(best_d_model_path)
-                best_auc = auc_out
+#                 best_g_model_path = g_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out:.2f}.h5")
+#                 best_d_model_path = d_model_path.replace(".h5", f"_best_{meta_iter}_{auc_out:.2f}.h5")
+#                 g_model.save(best_g_model_path)
+#                 d_model.save(best_d_model_path)
+#                 best_auc = auc_out
                 
-            # save model's weights
-            g_model.save(g_model_path)
-            d_model.save(d_model_path)
+#             # save model's weights
+#             g_model.save(g_model_path)
+#             d_model.save(d_model_path)
     
-    end_time = datetime.now()
-    TRAINING_DURATION = end_time - start_time
-    print(f'Duration of Training: {end_time - start_time}')
-    """
-    Train Ends
-    """
-    plot_epoch_result(iter_list, gen_loss_list, "Generator_Loss", name_model, "g")
-    plot_epoch_result(iter_list, disc_loss_list, "Discriminator_Loss", name_model, "r")
-    plot_epoch_result(iter_list, auc_list, "AUC_Score", name_model, "b")
+#     end_time = datetime.now()
+#     TRAINING_DURATION = end_time - start_time
+#     print(f'Duration of Training: {end_time - start_time}')
+#     """
+#     Train Ends
+#     """
+#     plot_epoch_result(iter_list, gen_loss_list, "Generator_Loss", name_model, "g")
+#     plot_epoch_result(iter_list, disc_loss_list, "Discriminator_Loss", name_model, "r")
+#     plot_epoch_result(iter_list, auc_list, "AUC_Score", name_model, "b")
 
 
 # In[ ]:
 
 
-test_dataset = Dataset(test_data_path, training=False, limit=LIMIT_TEST_IMAGES)
-testing(g_model, d_model, g_model_path, d_model_path, test_dataset.get_dataset(1))
+# test_dataset = Dataset(test_data_path, training=False, limit=LIMIT_TEST_IMAGES)
+# testing(g_model, d_model, g_model_path, d_model_path, test_dataset.get_dataset(1))
 
 
 # In[ ]:
 
 
-checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
+# checking_gen_disc(name_model, g_model, d_model, g_model_path, d_model_path, test_data_path)
 
 
 # In[ ]:
