@@ -347,8 +347,8 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
             ''' 
             random selecting
             '''
-            if class_n == "defect":
-                n_samples = 300
+            # if class_n == "defect":
+            #     n_samples = 300
             path_list, class_list = shuffle(path_list, class_list, n_samples=n_samples ,random_state=int(round(datetime.now().timestamp())))
         
         image_list = image_list + path_list
