@@ -35,7 +35,7 @@ from models.discriminator import build_discriminator
 
 from models.custom_optimizers import GCAdam
 from models.loss_func import SSIMLoss, AdversarialLoss, MultiFeatureLoss
-from models.data_augmentation import selecting_images_preprocessing, sliding_crop     , sliding_crop_and_select_one, custom_v3, enhance_image
+from models.data_augmentation import selecting_images_preprocessing, sliding_crop     , sliding_crop_and_select_one, custom_v3, enhance_image, data_augmentation_layers
 
 
 # In[ ]:
@@ -95,10 +95,10 @@ LIMIT_TRAIN_IMAGES = 100
 TRAINING_DURATION = None
 TESTING_DURATION = None
 
-NUMBER_IMAGES_SELECTED = 1000
+NUMBER_IMAGES_SELECTED = 500
 
 # range between 0-1
-anomaly_weight = 0.1
+anomaly_weight = 0.9
 
 learning_rate = 0.002
 meta_step_size = 0.25
@@ -124,8 +124,8 @@ DATASET_NAME = args["DATASET_NAME"]
 NO_DATASET = args["NO_DATASET"] # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
 
 PERCENTAGE_COMPOSITION_DATASET = {
-    "top": 50,
-    "mid": 40,
+    "top": 70,
+    "mid": 20,
     "bottom": 10
 }
 
@@ -415,20 +415,6 @@ def extraction_test(image, label):
 
     return img, label
 
-def augment_dataset_batch_train(dataset_batch):
-
-    flip_up_down = dataset_batch.map(lambda x: (tf.image.flip_up_down(x)), 
-              num_parallel_calls=AUTOTUNE)
-    
-    flip_left_right = dataset_batch.map(lambda x: (tf.image.flip_left_right(x)), 
-              num_parallel_calls=AUTOTUNE)
-    
-    dataset_batch = dataset_batch.concatenate(flip_up_down)
-    dataset_batch = dataset_batch.concatenate(flip_left_right)
-    
-    
-    return dataset_batch
-
 
 # In[ ]:
 
@@ -554,7 +540,6 @@ class Dataset:
             (temp_images.astype(np.float32), temp_labels.astype(np.int32))
         )
         dataset = dataset.shuffle(shots, seed=int(round(datetime.now().timestamp()))).batch(batch_size).repeat(repetitions)
-        dataset = augment_dataset_batch_train(dataset)
         
         if split:
             return dataset, test_images, test_labels
@@ -581,6 +566,7 @@ inputs = tf.keras.layers.Input(input_shape, name="input_1")
 
 g_model = build_seresnet50_unet(input_shape, IMG_H, IMG_C)
 d_model = build_discriminator(inputs, IMG_H)
+data_aug = data_augmentation_layers(IMG_H, IMG_W)
 
 if args["BACKBONE"] == "resnet50":
     
@@ -766,10 +752,14 @@ def train_step(real_images):
     
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         # tf.print("Images: ", images)
-        reconstructed_images = g_model(real_images, training=True)
+        
+        # apply augmentation method  
+        augmented_images = data_aug(real_images)
+        
+        reconstructed_images = g_model(augmented_images, training=True)
         
         # real_images = grayscale_converter(real_images)
-        feature_real, label_real = d_model(real_images, training=True)
+        feature_real, label_real = d_model(augmented_images, training=True)
         # print(generated_images.shape)
         feature_fake, label_fake = d_model(reconstructed_images, training=True)
 
@@ -800,10 +790,10 @@ def train_step(real_images):
         )
 
         # Loss 2: RECONSTRUCTION loss (L1)
-        loss_rec = mae(real_images, reconstructed_images)
+        loss_rec = mae(augmented_images, reconstructed_images)
 
         # Loss 3: SSIM Loss
-        loss_ssim =  ssim(real_images, reconstructed_images)
+        loss_ssim =  ssim(augmented_images, reconstructed_images)
 
         # Loss 4: FEATURE Loss
         # loss_feat = mse(feature_real, feature_fake)
@@ -838,7 +828,7 @@ if TRAIN:
     eval_dataset = Dataset(eval_data_path, training=False, limit=LIMIT_EVAL_IMAGES)
     eval_ds = eval_dataset.get_dataset(1)
 
-    
+    gc.collect()
     standard_auc = 0.7
     best_auc = standard_auc
     delay_ref = 3
@@ -860,6 +850,7 @@ if TRAIN:
         
         # print("meta_iter: ", meta_iter)
         for images, _ in mini_dataset:
+            
             g_loss, d_loss = train_step(images)
             gen_loss_out = g_loss
             disc_loss_out = d_loss

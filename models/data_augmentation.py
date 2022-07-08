@@ -193,3 +193,11 @@ def custom_v3(img):
     img = tf.image.adjust_gamma(img)
     img = tfa.image.median_filter2d(img, 3)
     return img
+
+def data_augmentation_layers(height, width):
+    data_augmentation = tf.keras.Sequential([
+        tf.layers.RandomFlip("horizontal_and_vertical"),
+        tf.layers.RandomRotation(0.2),
+        tf.keras.layers.Resizing(height, width),
+    ])
+    return data_augmentation
