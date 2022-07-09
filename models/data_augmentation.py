@@ -197,7 +197,7 @@ def custom_v3(img):
 def data_augmentation_layers(height, width):
     data_augmentation = tf.keras.Sequential([
         tf.layers.RandomFlip("horizontal_and_vertical"),
-        tf.layers.RandomRotation(0.2),
-        tf.keras.layers.Resizing(height, width),
+        # tf.layers.RandomRotation(0.2),
+        # tf.keras.layers.Resizing(height, width),
     ])
     return data_augmentation

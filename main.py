@@ -691,7 +691,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
     FP = cm[0][1]
     FN = cm[1][0]
     TN = cm[0][0]
-    print(cm)
+    # print(cm)
     print(
             "model saved. TP %d:, FP=%d, FN=%d, TN=%d" % (TP, FP, FN, TN)
     )
