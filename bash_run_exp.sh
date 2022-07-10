@@ -46,7 +46,7 @@ done
 # )
 
 listDataset=(
-    "mura_sobel_xy_64_v3"
+    "mura_sobel_xy_64_v3" "mura_sobel_xy_ori_v5" "mura_april"
 )
 
 # listDataset=(
@@ -101,23 +101,23 @@ done
 
 
 
-echo "start testing process for v1 dataset with test data v3"
-for t in ${listDataset[@]}; do
-    version=3
-    echo "Start Program $t of version $version"
-    res_dir="result/$t""_v$version/"
-    saved_model_dir="saved_model/$t""_v$version" 
-    # echo $res_dir
-    mkdir -p $res_dir
-    mkdir -p $saved_model_dir
-    # run programming
+# echo "start testing process for v1 dataset with test data v3"
+# for t in ${listDataset[@]}; do
+#     version=3
+#     echo "Start Program $t of version $version"
+#     res_dir="result/$t""_v$version/"
+#     saved_model_dir="saved_model/$t""_v$version" 
+#     # echo $res_dir
+#     mkdir -p $res_dir
+#     mkdir -p $saved_model_dir
+#     # run programming
 
-    # python3 few-shot-train-seresnet50.py -dn $t -s 20 -nd 0 -bb "seresnet50" > "output_$t""_v$version.log"
-    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" --MODE=true -rd $res_dir -ted "test_data_v1" -trd "train_data" -eld "eval_data" -smd $saved_model_dir -rtd "target_data_may"
+#     # python3 few-shot-train-seresnet50.py -dn $t -s 20 -nd 0 -bb "seresnet50" > "output_$t""_v$version.log"
+#     python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" --MODE=true -rd $res_dir -ted "test_data_v1" -trd "train_data" -eld "eval_data" -smd $saved_model_dir -rtd "target_data_may"
     
-    sleep 5
-    echo "Oops! I fell asleep for a couple seconds!"
-done
+#     sleep 5
+#     echo "Oops! I fell asleep for a couple seconds!"
+# done
 
 
 
@@ -171,23 +171,23 @@ done
 
 
 
-echo "start testing process for v1 dataset with test data v3"
-for t in ${listDataset[@]}; do
-    version=3
-    echo "Start Program $t of version $version"
-    res_dir="result/$t""_v$version/"
-    saved_model_dir="saved_model/$t""_v$version" 
-    # echo $res_dir
-    mkdir -p $res_dir
-    mkdir -p $saved_model_dir
-    # run programming
+# echo "start testing process for v1 dataset with test data v3"
+# for t in ${listDataset[@]}; do
+#     version=3
+#     echo "Start Program $t of version $version"
+#     res_dir="result/$t""_v$version/"
+#     saved_model_dir="saved_model/$t""_v$version" 
+#     # echo $res_dir
+#     mkdir -p $res_dir
+#     mkdir -p $saved_model_dir
+#     # run programming
 
-    # python3 few-shot-train-seresnet50.py -dn $t -s 20 -nd 0 -bb "seresnet50" > "output_$t""_v$version.log"
-    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" --MODE=false -rd $res_dir -ted "test_data_v1" -trd "train_data_v1" -eld "eval_data_v1" -smd $saved_model_dir -rtd "target_data"
+#     # python3 few-shot-train-seresnet50.py -dn $t -s 20 -nd 0 -bb "seresnet50" > "output_$t""_v$version.log"
+#     python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" --MODE=false -rd $res_dir -ted "test_data_v1" -trd "train_data_v1" -eld "eval_data_v1" -smd $saved_model_dir -rtd "target_data"
     
-    sleep 5
-    echo "Oops! I fell asleep for a couple seconds!"
-done
+#     sleep 5
+#     echo "Oops! I fell asleep for a couple seconds!"
+# done
 
 
 

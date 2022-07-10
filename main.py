@@ -359,7 +359,7 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
     return image_list, label_list
 
 def prep_stage(x, train=True):
-    beta_contrast = 0.05
+    beta_contrast = 0.2
     # enchance the brightness
     x = enhance_image(x, beta_contrast)
     # if train:
