@@ -46,7 +46,7 @@ done
 # )
 
 listDataset=(
-    "mura_sobel_xy_32_v5" "mura_sobel_xy_64_v3"
+    "mura_sobel_xy_64_v3"
 )
 
 # listDataset=(

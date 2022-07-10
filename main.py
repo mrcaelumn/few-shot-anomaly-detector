@@ -124,9 +124,9 @@ DATASET_NAME = args["DATASET_NAME"]
 NO_DATASET = args["NO_DATASET"] # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
 
 PERCENTAGE_COMPOSITION_DATASET = {
-    "top": 70,
-    "mid": 20,
-    "bottom": 10
+    "top": 40,
+    "mid": 30,
+    "bottom": 30
 }
 
 mode_colour = str(IMG_H) + "_rgb"
@@ -359,7 +359,7 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
     return image_list, label_list
 
 def prep_stage(x, train=True):
-    beta_contrast = 0.1
+    beta_contrast = 0.05
     # enchance the brightness
     x = enhance_image(x, beta_contrast)
     # if train:
@@ -569,15 +569,14 @@ d_model = build_discriminator(inputs, IMG_H)
 data_aug = data_augmentation_layers(IMG_H, IMG_W)
 
 if args["BACKBONE"] == "resnet50":
-    
     print("backbone selected: resnet50")
     g_model = build_generator_resnet50_unet(input_shape, IMG_H, IMG_C)
-elif args["BACKBONE"] == "seresnext50":
     
+elif args["BACKBONE"] == "seresnext50":
     print("backbone selected: seresnext50")
     g_model = build_seresnext50_unet(input_shape, IMG_H, IMG_C)
-else:
     
+else:
     print("backbone selected (default): seresnext50")
     g_model = build_seresnet50_unet(input_shape, IMG_H, IMG_C)
     
@@ -667,7 +666,6 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         #         loss_rec = r_rec_loss
         #         loss_feat = r_feat_loss
                 
-            
         scores_ano = np.append(scores_ano, score)
         real_label = np.append(real_label, labels.numpy()[0])
         
@@ -717,16 +715,7 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         f"Testing Duration: {TESTING_DURATION}"
     ]
     print("\n".join(arr_result))
-    
-    # print("Accuracy: ", diagonal_sum / sum_of_all_elements)
-    # print("False Alarm Rate (FPR): ", FP/(FP+TN))
-    # print("Leakage Rat (FNR): ", FN/(FN+TP))
-    # print("TNR: ", TN/(FP+TN))
-    # print("precision_score: ", TP/(TP+FP))
-    # print("recall_score: ", TP/(TP+FN))
-    # print("NPV: ", TN/(FN+TN))
-    # print("F1-Score: ", f1_score(real_label, scores_ano))
-    
+
     write_result(arr_result, name_model)
 
 
@@ -829,7 +818,7 @@ if TRAIN:
     eval_ds = eval_dataset.get_dataset(1)
 
     gc.collect()
-    standard_auc = 0.7
+    standard_auc = 0.8
     best_auc = standard_auc
     delay_ref = 3
     
