@@ -46,7 +46,7 @@ done
 # )
 
 listDataset=(
-    "mura_sobel_xy_64_v3" "mura_sobel_xy_ori_v5" "mura_april"
+    "mura_sobel_xy_64_v3" "mura_sobel_xy_ori_v5"
 )
 
 # listDataset=(
@@ -143,7 +143,7 @@ for t in ${listDataset[@]}; do
     # run programming
 
     # python3 few-shot-train-seresnet50.py -dn $t -s 20 -nd 0 -bb "seresnet50" > output_$t.log
-    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" -m false -rd $res_dir -ted "test_data_v2" -trd "train_data_v1" -eld "eval_data_v1" -smd $saved_model_dir -rtd "target_data" > "output_$t""_v$version.log"
+    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" -m false -rd $res_dir -ted "test_data_v2" -trd "train_data_v1" -eld "eval_data_v1" -smd $saved_model_dir -rtd "target_data"
     
     sleep 5
     echo "Oops! I fell asleep for a couple seconds!"
@@ -162,7 +162,7 @@ for t in ${listDataset[@]}; do
     # run programming
 
     # python3 few-shot-train-seresnet50.py -dn $t -s 20 -nd 0 -bb "seresnet50" > output_$t.log
-    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" -m false -rd $res_dir -ted "test_data_v1" -trd "train_data_v2" -eld "eval_data_v2" -smd $saved_model_dir -rtd "target_data" > "output_$t""_v$version.log"
+    python3 main.py -dn $t -s 20 -nd 0 -bb "seresnext50" -m false -rd $res_dir -ted "test_data_v1" -trd "train_data_v2" -eld "eval_data_v2" -smd $saved_model_dir -rtd "target_data"
     
     sleep 5
     echo "Oops! I fell asleep for a couple seconds!"

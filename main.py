@@ -408,10 +408,10 @@ def extraction_test(image, label):
     # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     
     img = prep_stage(img, False)
-    img = post_stage(img)
+    # img = post_stage(img)
     
-    # img_list = sliding_crop(img)
-    # img = [post_stage(a) for a in img_list]
+    img_list = sliding_crop(img)
+    img = [post_stage(a) for a in img_list]
 
     return img, label
 
@@ -655,16 +655,16 @@ def testing(g_model_inner, d_model_inner, g_filepath, d_filepath, test_ds):
         
         # counter += 1
         '''for normal'''
-        temp_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, images)
-        score = temp_score.numpy()
+        # temp_score, loss_rec, loss_feat = calculate_a_score(g_model_inner, d_model_inner, images)
+        # score = temp_score.numpy()
         
         '''for sliding images & Crop LR'''
-        # for image in images:
-        #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, image)
-        #     if r_score.numpy() > score or score == 0:
-        #         score = r_score.numpy()
-        #         loss_rec = r_rec_loss
-        #         loss_feat = r_feat_loss
+        for image in images:
+            r_score, r_rec_loss, r_feat_loss = calculate_a_score(g_model_inner, d_model_inner, image)
+            if r_score.numpy() > score or score == 0:
+                score = r_score.numpy()
+                loss_rec = r_rec_loss
+                loss_feat = r_feat_loss
                 
         scores_ano = np.append(scores_ano, score)
         real_label = np.append(real_label, labels.numpy()[0])
@@ -883,16 +883,16 @@ if TRAIN:
                 # counter += 1
                 
                 '''for normal'''
-                temp_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, images)
-                score = temp_score.numpy()
+                # temp_score, loss_rec, loss_feat = calculate_a_score(eval_g_model, eval_d_model, images)
+                # score = temp_score.numpy()
 
                 '''for Sliding Images & LR Crop'''
-                # for image in images:
-                #     r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
-                #     if r_score.numpy() > score or score == 0:
-                #         score = r_score.numpy()
-                #         loss_rec = r_rec_loss
-                #         loss_feat = r_feat_loss
+                for image in images:
+                    r_score, r_rec_loss, r_feat_loss = calculate_a_score(eval_g_model, eval_d_model, image)
+                    if r_score.numpy() > score or score == 0:
+                        score = r_score.numpy()
+                        loss_rec = r_rec_loss
+                        loss_feat = r_feat_loss
                     
                 scores_ano = np.append(scores_ano, score)
                 real_label = np.append(real_label, labels.numpy()[0])
