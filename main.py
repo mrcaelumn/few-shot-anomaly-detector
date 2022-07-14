@@ -124,9 +124,9 @@ DATASET_NAME = args["DATASET_NAME"]
 NO_DATASET = args["NO_DATASET"] # 0=0-999 images, 1=1000-1999, 2=2000-2999 so on
 
 PERCENTAGE_COMPOSITION_DATASET = {
-    "top": 40,
-    "mid": 30,
-    "bottom": 30
+    "top": 70,
+    "mid": 20,
+    "bottom": 10
 }
 
 mode_colour = str(IMG_H) + "_rgb"
@@ -359,7 +359,7 @@ def read_data_with_labels(filepath, class_names, training=True, limit=100):
     return image_list, label_list
 
 def prep_stage(x, train=True):
-    beta_contrast = 0.2
+    beta_contrast = 0.1
     # enchance the brightness
     x = enhance_image(x, beta_contrast)
     # if train:
