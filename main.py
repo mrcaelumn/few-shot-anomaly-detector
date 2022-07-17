@@ -141,7 +141,7 @@ d_model_path = f"{SAVED_MODEL_DIR}/{name_model}_d_model.h5"
 result_folder = args["RESULT_DIR"]
 
 TRAIN = args["MODE"]
-print(TRAIN, type(TRAIN))
+# print(TRAIN, type(TRAIN))
 # if not TRAIN:
 #     g_model_path = "saved_model/g_model_name.h5"
 #     d_model_path = "saved_model/d_model_name.h5"
