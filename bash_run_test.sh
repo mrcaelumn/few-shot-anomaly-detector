@@ -31,7 +31,7 @@ listDataset=(
 listShots=(5 10 15 20)
 listNoDataset=(0 1 2 3 4)
 
-echo "start training process for area dataset"
+echo "start testing process for linear with gaussion filter 5x5 dataset"
 for t in ${listDataset[@]}; do
     version=1
     echo "Start Program $t of version $version"
@@ -47,7 +47,7 @@ for t in ${listDataset[@]}; do
     echo "Oops! I fell asleep for a couple seconds!"
 done
 
-echo "start training process for area dataset"
+echo "start training process for linear with gaussion filter 3x3 dataset"
 for t in ${listDataset[@]}; do
     version=1
     echo "Start Program $t of version $version"
@@ -105,6 +105,10 @@ for t in ${listDataset[@]}; do
     sleep 5
     echo "Oops! I fell asleep for a couple seconds!"
 done
+
+
+
+
 
 
 
