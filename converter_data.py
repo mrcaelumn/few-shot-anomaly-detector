@@ -57,26 +57,27 @@ def remove_hidden_file(list_arr):
 
 
 source_target_dict = {
-    "resize_data/mura_april_lanc":"target_data_lanc",
-    "resize_data/mura_april_area":"target_data_area",
-    "resize_data/mura_april_cubic":"target_data_cubic",
-    "resize_data/mura_april_nearest":"target_data_nearest",
+    "data/mura_april_linear_blurred_v3":"target_data_linear_blurred_v3",
+    # "data/mura_april_area_smoothed_clahe":"target_data_area_smoothed_clahe",
 }
 
 for source_dir, root_target_dir in source_target_dict.items():
     print(source_dir, root_target_dir)
     
-    list_target_dir = natsort.natsorted(os.listdir(root_target_dir))
+#     list_target_dir = natsort.natsorted(os.listdir(root_target_dir))
 
-    list_target_dir = remove_hidden_file(list_target_dir)
+#     list_target_dir = remove_hidden_file(list_target_dir)
     # print(list_target_dir)
-    list_target = ["mura_sobel_xy_64_v3", "mura_sobel_xy_ori_v5"]
+    # list_target = ["mura_sobel_xy_64_v3", "mura_sobel_xy_ori_v5"]
+    list_target = ["mura_sobel_xy_ori_v5"]
 
     for target_folder in list_target:
         target_dir = root_target_dir + "/" + target_folder
         if not os.path.exists(target_dir):
             os.makedirs(target_dir)
-
+        
+        # list_target_dir = remove_hidden_file(list_target_dir)
+        
         target_data = target_folder.split("_")
         print(target_data)
         type_operator, type_pre, depth, kersize = target_data[1], target_data[2], target_data[3], target_data[4]
