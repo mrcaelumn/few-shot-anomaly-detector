@@ -106,7 +106,7 @@ meta_step_size = 0.25
 inner_batch_size = 25
 eval_batch_size = 25
 
-meta_iters = 2000
+meta_iters = 1500
 inner_iters = 4
 
 
